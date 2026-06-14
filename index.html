@@ -2,6 +2,7 @@
 <html lang="pt-BR">
 <head>
 <meta charset="UTF-8">
+<link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='.9em' font-size='90'>⚽</text></svg>">
 <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0">
 <title>Bolao Copa 2026</title>
 <link href="https://fonts.googleapis.com/css2?family=Barlow+Condensed:wght@400;600;700;900&family=Barlow:wght@400;500;600;700&display=swap" rel="stylesheet">
@@ -443,6 +444,16 @@ body{font-family:'Barlow',sans-serif;background:var(--cinza);color:var(--texto);
 <div id="toast"></div>
 
 <script>
+window.onerror = function(msg, src, line, col, err){
+  var div = document.getElementById('err-global');
+  if(!div){ div=document.createElement('div');
+    div.id='err-global';
+    div.style.cssText='position:fixed;top:0;left:0;right:0;background:#DC2626;color:#fff;padding:12px;font-size:12px;z-index:9999;word-break:break-all';
+    document.body.appendChild(div);
+  }
+  div.textContent = 'ERRO JS: ' + msg + ' (linha '+line+')';
+  return false;
+};
 var SB = window.supabase.createClient('https://kqtjievcjocjuyswwvow.supabase.co','eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImtxdGppZXZjam9janV5c3d3dm93Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODAzNzgwNTcsImV4cCI6MjA5NTk1NDA1N30._52asyQvhmLGJoV6A6PG6FXVzSgIKI1h5-5NWSf0vy8');
 
 // ── PONTOS ──────────────────────────────────────────────────────────────────
@@ -1849,4 +1860,128 @@ async function salvarTimes(id){
   var ok = await salvarTimesDB(id, nc, nf);
   if(ok){
     toast(flag(nc)+nc+' x '+flag(nf)+nf+' salvo!','ok');
-    if(btn){btn.disabled=false;btn.innerHTML='&#x2713; Salvo';btn.classList.add('sa
+    if(btn){btn.disabled=false;btn.innerHTML='&#x2713; Salvo';btn.classList.add('salvo');}
+  } else {
+    if(btn){btn.disabled=false;btn.innerHTML='&#x1F4BE; Salvar';}
+  }
+}
+
+function anularJogo(){
+  var sel=document.getElementById('sel-anular');
+  if(!sel||!sel.value){toast('Selecione o jogo!','err');return;}
+  var id=parseInt(sel.value);
+  var j=JOGOS.find(function(x){return x[0]===id;});
+  var nome=j?j[5]+' x '+j[6]:'#'+id;
+  if(!confirm('Anular jogo #'+id+' '+nome+'?\nTodos receberão 0 pts neste jogo.'))return;
+  JOGOS_ANULADOS[id]=true;
+  toast('Jogo #'+id+' anulado — 0 pts para todos!','ok');
+  renderAdmin();
+}
+function restaurarJogo(){
+  var sel=document.getElementById('sel-anular');
+  if(!sel||!sel.value){toast('Selecione o jogo!','err');return;}
+  var id=parseInt(sel.value);
+  delete JOGOS_ANULADOS[id];
+  toast('Jogo #'+id+' restaurado — pontos normais!','ok');
+  renderAdmin();
+}
+function alterarDataJogo(){
+  var sel = document.getElementById('sel-altdt');
+  var dt  = document.getElementById('inp-dt').value;
+  var hr  = document.getElementById('inp-hr').value;
+  if(!sel||!sel.value||!dt||!hr){toast('Selecione o jogo, data e hora!','err');return;}
+  var id = parseInt(sel.value);
+  JOGOS_HORARIO[id] = dt+'T'+hr;
+  toast('Jogo #'+id+' alterado para '+dt.slice(5)+' '+hr+' BRT','ok');
+  renderAdmin();
+}
+function restaurarDataJogo(){
+  var sel = document.getElementById('sel-altdt');
+  if(!sel||!sel.value){toast('Selecione o jogo!','err');return;}
+  var id = parseInt(sel.value);
+  delete JOGOS_HORARIO[id];
+  toast('Jogo #'+id+' restaurado ao horario original','ok');
+  renderAdmin();
+}
+function reabrirJogo(){
+  var sel = document.getElementById('sel-reabrir');
+  if(!sel||!sel.value)return;
+  var id = parseInt(sel.value);
+  var j = JOGOS.find(function(x){return x[0]===id;});
+  if(!j)return;
+  JOGOS_REABERTOS[id] = true;
+  toast('Jogo #'+id+' reaberto para palpites!','ok');
+  renderAdmin();
+  renderPalpites();
+}
+function fecharJogo(){
+  var sel = document.getElementById('sel-reabrir');
+  if(!sel||!sel.value)return;
+  var id = parseInt(sel.value);
+  delete JOGOS_REABERTOS[id];
+  toast('Jogo #'+id+' bloqueado novamente!','ok');
+  renderAdmin();
+  renderPalpites();
+}
+
+async function salvarRes(id){
+  var vc=document.getElementById('a'+id+'c').value;
+  var vf=document.getElementById('a'+id+'f').value;
+  if(vc===''||vf===''){toast('Preencha os dois placares!','err');return;}
+  var btn=document.getElementById('bsv'+id);
+  btn.disabled=true;btn.textContent='...';
+  var err=await dbUpsert('resultados',{
+    jogo_id:id,gol_casa:parseInt(vc),gol_fora:parseInt(vf),
+    inserido_em:new Date().toISOString()
+  },'jogo_id');
+  if(err){toast('Erro: '+err.message,'err');btn.disabled=false;btn.textContent='Salvar';}
+  else{RESULS[id]={c:parseInt(vc),f:parseInt(vf)};toast('Jogo #'+id+' salvo!','ok');setTimeout(renderAdmin,500);}
+}
+
+function editarRes(id){
+  document.getElementById('res-view'+id).style.display='none';
+  document.getElementById('res-edit'+id).style.display='flex';
+}
+function cancelarEditRes(id){
+  document.getElementById('res-view'+id).style.display='flex';
+  document.getElementById('res-edit'+id).style.display='none';
+}
+async function confirmarEditRes(id){
+  var vc=document.getElementById('ec'+id).value;
+  var vf=document.getElementById('ef'+id).value;
+  if(vc===''||vf===''){toast('Preencha os dois placares!','err');return;}
+  var err=await dbUpsert('resultados',{
+    jogo_id:id,gol_casa:parseInt(vc),gol_fora:parseInt(vf),
+    inserido_em:new Date().toISOString()
+  },'jogo_id');
+  if(err){toast('Erro: '+err.message,'err');return;}
+  RESULS[id]={c:parseInt(vc),f:parseInt(vf)};
+  toast('Placar corrigido! '+vc+' x '+vf,'ok');
+  setTimeout(renderAdmin,400);
+}
+
+async function excluirRes(id){
+  var j=JOGOS.find(function(x){return x[0]===id;});
+  if(!confirm('Excluir resultado: '+(j?j[5]+' x '+j[6]:'#'+id)+'?'))return;
+  var err=await dbDelete('resultados','jogo_id',id);
+  if(err)toast('Erro: '+err.message,'err');
+  else{delete RESULS[id];toast('Resultado excluido!','ok');setTimeout(renderAdmin,400);}
+}
+
+// ── UTILS ─────────────────────────────────────────────────────────────────────
+function loading(m){document.getElementById('loading').style.display='flex';document.getElementById('lmsg').textContent=m||'';}
+function noloading(){document.getElementById('loading').style.display='none';}
+function toast(msg,tipo){
+  var t=document.getElementById('toast');
+  t.textContent=msg;t.className='show '+(tipo||'');
+  clearTimeout(TTIMER);
+  TTIMER=setTimeout(function(){t.className='';},2600);
+}
+
+document.addEventListener('DOMContentLoaded',function(){
+  document.getElementById('e-senha').addEventListener('keydown',function(e){if(e.key==='Enter')entrar();});
+  document.getElementById('c-s2').addEventListener('keydown',function(e){if(e.key==='Enter')cadastrar();});
+});
+</script>
+</body>
+</html>
