@@ -1092,8 +1092,10 @@ async function persistir(id){
     gol_casa:p.c,gol_fora:p.f,
     atualizado_em:new Date().toISOString()
   },'usuario,jogo_id');
-  if(err)toast('Erro ao salvar: '+err.message,'err');
-  else toast('Palpite salvo!','ok');
+  if(err){
+    console.error('Erro Supabase:', err);
+    toast('Erro: '+err.message+' ('+err.code+')','err');
+  } else toast('Palpite salvo! #'+id,'ok');
 }
 
 // ── MODAL — PALPITES DE TODOS ─────────────────────────────────────────────────
