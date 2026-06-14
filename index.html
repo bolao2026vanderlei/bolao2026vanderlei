@@ -573,6 +573,7 @@ var BLOQUEIO_MIN = 10; // minutos antes do jogo
 // ── ESTADO ──────────────────────────────────────────────────────────────────
 var USER=null, PALPS={}, RESULS={}, FILTRO='Todos', DTIMER={}, TTIMER=null;
 var JOGOS_REABERTOS = {};
+var JOGOS_ANULADOS = {9: true}; // Jogo #9 Alemanha x Curacao anulado por falha no cadastro // {jogoId: true} — jogo anulado, 0 pts para todos
 var JOGOS_HORARIO = {}; // overrides de data/hora admin: {jogoId: 'YYYY-MM-DDTHH:MM'} // admin pode forcar reabertura: {jogoId: true}
 
 
@@ -772,7 +773,8 @@ async function carregarDados(){
 }
 
 // ── PONTUACAO ─────────────────────────────────────────────────────────────────
-function calcPts(fase,pc,pf,rc,rf){
+function calcPts(fase,pc,pf,rc,rf,jogoId){
+  if(jogoId && JOGOS_ANULADOS[jogoId]) return 0; // jogo anulado
   if(pc==null||pf==null||rc==null||rf==null)return 0;
   var par=PTS[fase];if(!par)return 0;
   pc=+pc;pf=+pf;rc=+rc;rf=+rf;
@@ -810,7 +812,7 @@ async function calcularRankCompleto(){
     var total=0,exatos=0,acertos=0,np=Object.keys(pals).length;
     JOGOS.forEach(function(j){
       var p=pals[j[0]],r=RESULS[j[0]];if(!p||!r)return;
-      var pts=calcPts(j[2],p.c,p.f,r.c,r.f);
+      var pts=calcPts(j[2],p.c,p.f,r.c,r.f,j[0]);
       if(pts>0){total+=pts;acertos++;if(pts===PTS[j[2]][1])exatos++;}
     });
     return{nome:u.nome,total:total,exatos:exatos,acertos:acertos,np:np};
@@ -855,7 +857,7 @@ function calcCache(){
   var t=0,a=0,e=0;
   JOGOS.forEach(function(j){
     var p=PALPS[j[0]],r=RESULS[j[0]];if(!p||!r)return;
-    var pts=calcPts(j[2],p.c,p.f,r.c,r.f);
+    var pts=calcPts(j[2],p.c,p.f,r.c,r.f,j[0]);
     if(pts>0){t+=pts;a++;if(pts===PTS[j[2]][1])e++;}
   });
   return{total:t,acertos:a,exatos:e};
@@ -1059,43 +1061,123 @@ function jcard(j, editavel){
 }
 
 // ── SALVAR PALPITE ────────────────────────────────────────────────────────────
+// Sistema de salvamento robusto com fila e retry
+var SAVING = {}; // {id: true} — evita chamadas simultâneas
+var PENDING = {}; // {id: {c,f}} — palpite pendente enquanto salva
+
 function salvar(id,lado,val){
-  // Verifica se ainda esta no prazo
   var j=JOGOS.find(function(x){return x[0]===id;});
   if(j){
-    var st=statusJogo(j[1], id);
+    var st=statusJogo(j[1],id);
     if(st==='bloqueado'||st==='encerrado'){
-      toast('Palpites encerrados para este jogo!','err');
+      toast('Palpites encerrados!','err');
       return;
     }
   }
   if(!PALPS[id])PALPS[id]={};
   PALPS[id][lado]=val===''?null:parseInt(val);
+
+  // Marca input visualmente
+  var inp=document.getElementById('i'+id+(lado==='c'?'c':'f'));
+  if(inp){inp.style.borderColor='#F59E0B';} // amarelo = aguardando
+
   clearTimeout(DTIMER[id]);
-  DTIMER[id]=setTimeout(function(){persistir(id);},600);
+  DTIMER[id]=setTimeout(function(){persistir(id,0);},800);
 }
 
-async function persistir(id){
-  // Double-check no servidor
+async function persistir(id, tentativa){
+  if(tentativa===undefined)tentativa=0;
+  var p=PALPS[id];
+  if(!p||p.c==null||p.f==null)return;
+
+  // Se já está salvando este jogo, agenda para depois
+  if(SAVING[id]){
+    PENDING[id]={c:p.c,f:p.f};
+    return;
+  }
+  SAVING[id]=true;
+
   var j=JOGOS.find(function(x){return x[0]===id;});
   if(j){
-    var st=statusJogo(j[1], id);
+    var st=statusJogo(j[1],id);
     if(st==='bloqueado'||st==='encerrado'){
-      toast('Palpites encerrados para este jogo!','err');
+      SAVING[id]=false;
+      toast('Palpites encerrados!','err');
       return;
     }
   }
-  var p=PALPS[id];
-  if(!p||p.c==null||p.f==null)return;
-  var err=await dbUpsert('palpites',{
-    usuario:USER.nome,jogo_id:id,
-    gol_casa:p.c,gol_fora:p.f,
-    atualizado_em:new Date().toISOString()
-  },'usuario,jogo_id');
-  if(err){
-    console.error('Erro Supabase:', err);
-    toast('Erro: '+err.message+' ('+err.code+')','err');
-  } else toast('Palpite salvo! #'+id,'ok');
+
+  try{
+    // Estratégia: SELECT → UPDATE se existe, INSERT se não existe
+    var {data: existe, error: eS} = await SB
+      .from('palpites')
+      .select('id')
+      .eq('usuario', USER.nome)
+      .eq('jogo_id', id)
+      .maybeSingle();
+
+    var erro = null;
+    if(existe){
+      // Registro existe — faz UPDATE pelo id primário
+      var {error: eU} = await SB
+        .from('palpites')
+        .update({
+          gol_casa: p.c,
+          gol_fora: p.f,
+          atualizado_em: new Date().toISOString()
+        })
+        .eq('id', existe.id);
+      erro = eU;
+      console.log('UPDATE jogo #'+id+' id='+existe.id, eU||'OK');
+    } else {
+      // Não existe — faz INSERT
+      var {error: eI} = await SB
+        .from('palpites')
+        .insert({
+          usuario: USER.nome,
+          jogo_id: id,
+          gol_casa: p.c,
+          gol_fora: p.f,
+          atualizado_em: new Date().toISOString()
+        });
+      erro = eI;
+      console.log('INSERT jogo #'+id, eI||'OK');
+    }
+
+    if(erro){
+      console.error('Erro jogo #'+id+':', erro);
+      if(tentativa < 3){
+        SAVING[id]=false;
+        setTimeout(function(){persistir(id, tentativa+1);}, 1000);
+        return;
+      }
+      toast('Erro #'+id+': '+erro.message,'err');
+    } else {
+      var ic=document.getElementById('i'+id+'c');
+      var if2=document.getElementById('i'+id+'f');
+      if(ic){ic.style.borderColor='#00A36C';ic.style.background='#E8F8F2';}
+      if(if2){if2.style.borderColor='#00A36C';if2.style.background='#E8F8F2';}
+      toast('Salvo! #'+id+' '+p.c+'x'+p.f,'ok');
+    }
+  } catch(e){
+    console.error('Excecao #'+id+':', e);
+    if(tentativa < 2){
+      SAVING[id]=false;
+      setTimeout(function(){persistir(id, tentativa+1);}, 1500);
+      return;
+    }
+    toast('Erro: '+e.message,'err');
+  }
+
+  SAVING[id]=false;
+
+  // Se tinha palpite pendente, salva agora
+  if(PENDING[id]){
+    var pend=PENDING[id];
+    delete PENDING[id];
+    PALPS[id]={c:pend.c,f:pend.f};
+    setTimeout(function(){persistir(id,0);}, 300);
+  }
 }
 
 // ── MODAL — PALPITES DE TODOS ─────────────────────────────────────────────────
@@ -1198,7 +1280,7 @@ async function abrirModal(jogoId, event){
     if(u.pal){
       palHtml='<div class="pr-palpite">'+u.pal.c+' x '+u.pal.f+'</div>';
       if(r){
-        var pts=calcPts(j[2],u.pal.c,u.pal.f,r.c,r.f);
+        var pts=calcPts(j[2],u.pal.c,u.pal.f,r.c,r.f,jogoId);
         var pe=PTS[j[2]]?PTS[j[2]][1]:0,pr2=PTS[j[2]]?PTS[j[2]][0]:0;
         if(pts===pe)ptsHtml='<span class="pr-pts exato">+'+pts+' Exato!</span>';
         else if(pts===pr2)ptsHtml='<span class="pr-pts result">+'+pts+' Resultado</span>';
@@ -1405,7 +1487,7 @@ async function renderRanking(){
     var total=0,acertos=0,exatos=0;
     JOGOS.forEach(function(j){
       var p=pals[j[0]],r=RESULS[j[0]];if(!p||!r)return;
-      var pts=calcPts(j[2],p.c,p.f,r.c,r.f);
+      var pts=calcPts(j[2],p.c,p.f,r.c,r.f,j[0]);
       if(pts>0){total+=pts;acertos++;if(pts===PTS[j[2]][1])exatos++;}
     });
     return{nome:u.nome,total:total,acertos:acertos,exatos:exatos,np:Object.keys(pals).length};
@@ -1703,6 +1785,32 @@ async function renderAdmin(){
           :"")+
       '</div>'+
     '</div>'+
+    '<div class="acard" style="border-color:#FECACA;margin-bottom:12px">'+
+      '<h3>&#x26D4; Anular / Restaurar Jogo</h3>'+
+      '<div style="font-size:11px;color:var(--texto3);margin-bottom:10px;line-height:1.6">'+
+        'Anule um jogo para que todos recebam 0 pontos (ex: erro no cadastro). O resultado e palpites sao mantidos.'+
+      '</div>'+
+      '<div style="display:flex;align-items:center;gap:8px;flex-wrap:wrap">'+
+        '<select id="sel-anular" style="flex:1;padding:8px;border-radius:8px;border:1.5px solid var(--borda);background:var(--cinza2);color:var(--texto);font-size:13px;outline:none">'+
+          JOGOS.filter(function(j){return !!RESULS[j[0]];})
+            .map(function(j){
+              var nc=getNomeExibicao(j[0],"casa",j[5]);
+              var nf=getNomeExibicao(j[0],"fora",j[6]);
+              var anulado=JOGOS_ANULADOS[j[0]]?" ⛔":"";
+              return "<option value="+j[0]+">#"+j[0]+" "+nc+" x "+nf+anulado+"</option>";
+            }).join("")+
+        "</select>"+
+        '<button class="btn-sv" onclick="anularJogo()" style="background:var(--vermelho)">&#x26D4; Anular</button>'+
+        '<button class="btn-sv" onclick="restaurarJogo()" style="background:var(--verde)">&#x2713; Restaurar</button>'+
+      '</div>'+
+      (Object.keys(JOGOS_ANULADOS).length>0?
+        '<div style="margin-top:8px;font-size:12px;color:var(--vermelho);font-weight:600">&#x26D4; Anulados: '+
+        Object.keys(JOGOS_ANULADOS).map(function(id){
+          var j=JOGOS.find(function(x){return x[0]===+id;});
+          return j?"#"+id+" "+j[5]+" x "+j[6]:"#"+id;
+        }).join(", ")+"</div>"
+        :"")+
+    '</div>'+
     '<div class="acard" style="border-color:#FED7AA;margin-bottom:12px">'+
       '<h3>&#x1F513; Reabrir Palpites de Jogo</h3>'+
       '<div style="font-size:11px;color:var(--texto3);margin-bottom:10px">'+
@@ -1741,109 +1849,4 @@ async function salvarTimes(id){
   var ok = await salvarTimesDB(id, nc, nf);
   if(ok){
     toast(flag(nc)+nc+' x '+flag(nf)+nf+' salvo!','ok');
-    if(btn){btn.disabled=false;btn.innerHTML='&#x2713; Salvo';btn.classList.add('salvo');}
-  } else {
-    if(btn){btn.disabled=false;btn.innerHTML='&#x1F4BE; Salvar';}
-  }
-}
-
-function alterarDataJogo(){
-  var sel = document.getElementById('sel-altdt');
-  var dt  = document.getElementById('inp-dt').value;
-  var hr  = document.getElementById('inp-hr').value;
-  if(!sel||!sel.value||!dt||!hr){toast('Selecione o jogo, data e hora!','err');return;}
-  var id = parseInt(sel.value);
-  JOGOS_HORARIO[id] = dt+'T'+hr;
-  toast('Jogo #'+id+' alterado para '+dt.slice(5)+' '+hr+' BRT','ok');
-  renderAdmin();
-}
-function restaurarDataJogo(){
-  var sel = document.getElementById('sel-altdt');
-  if(!sel||!sel.value){toast('Selecione o jogo!','err');return;}
-  var id = parseInt(sel.value);
-  delete JOGOS_HORARIO[id];
-  toast('Jogo #'+id+' restaurado ao horario original','ok');
-  renderAdmin();
-}
-function reabrirJogo(){
-  var sel = document.getElementById('sel-reabrir');
-  if(!sel||!sel.value)return;
-  var id = parseInt(sel.value);
-  var j = JOGOS.find(function(x){return x[0]===id;});
-  if(!j)return;
-  JOGOS_REABERTOS[id] = true;
-  toast('Jogo #'+id+' reaberto para palpites!','ok');
-  renderAdmin();
-  renderPalpites();
-}
-function fecharJogo(){
-  var sel = document.getElementById('sel-reabrir');
-  if(!sel||!sel.value)return;
-  var id = parseInt(sel.value);
-  delete JOGOS_REABERTOS[id];
-  toast('Jogo #'+id+' bloqueado novamente!','ok');
-  renderAdmin();
-  renderPalpites();
-}
-
-async function salvarRes(id){
-  var vc=document.getElementById('a'+id+'c').value;
-  var vf=document.getElementById('a'+id+'f').value;
-  if(vc===''||vf===''){toast('Preencha os dois placares!','err');return;}
-  var btn=document.getElementById('bsv'+id);
-  btn.disabled=true;btn.textContent='...';
-  var err=await dbUpsert('resultados',{
-    jogo_id:id,gol_casa:parseInt(vc),gol_fora:parseInt(vf),
-    inserido_em:new Date().toISOString()
-  },'jogo_id');
-  if(err){toast('Erro: '+err.message,'err');btn.disabled=false;btn.textContent='Salvar';}
-  else{RESULS[id]={c:parseInt(vc),f:parseInt(vf)};toast('Jogo #'+id+' salvo!','ok');setTimeout(renderAdmin,500);}
-}
-
-function editarRes(id){
-  document.getElementById('res-view'+id).style.display='none';
-  document.getElementById('res-edit'+id).style.display='flex';
-}
-function cancelarEditRes(id){
-  document.getElementById('res-view'+id).style.display='flex';
-  document.getElementById('res-edit'+id).style.display='none';
-}
-async function confirmarEditRes(id){
-  var vc=document.getElementById('ec'+id).value;
-  var vf=document.getElementById('ef'+id).value;
-  if(vc===''||vf===''){toast('Preencha os dois placares!','err');return;}
-  var err=await dbUpsert('resultados',{
-    jogo_id:id,gol_casa:parseInt(vc),gol_fora:parseInt(vf),
-    inserido_em:new Date().toISOString()
-  },'jogo_id');
-  if(err){toast('Erro: '+err.message,'err');return;}
-  RESULS[id]={c:parseInt(vc),f:parseInt(vf)};
-  toast('Placar corrigido! '+vc+' x '+vf,'ok');
-  setTimeout(renderAdmin,400);
-}
-
-async function excluirRes(id){
-  var j=JOGOS.find(function(x){return x[0]===id;});
-  if(!confirm('Excluir resultado: '+(j?j[5]+' x '+j[6]:'#'+id)+'?'))return;
-  var err=await dbDelete('resultados','jogo_id',id);
-  if(err)toast('Erro: '+err.message,'err');
-  else{delete RESULS[id];toast('Resultado excluido!','ok');setTimeout(renderAdmin,400);}
-}
-
-// ── UTILS ─────────────────────────────────────────────────────────────────────
-function loading(m){document.getElementById('loading').style.display='flex';document.getElementById('lmsg').textContent=m||'';}
-function noloading(){document.getElementById('loading').style.display='none';}
-function toast(msg,tipo){
-  var t=document.getElementById('toast');
-  t.textContent=msg;t.className='show '+(tipo||'');
-  clearTimeout(TTIMER);
-  TTIMER=setTimeout(function(){t.className='';},2600);
-}
-
-document.addEventListener('DOMContentLoaded',function(){
-  document.getElementById('e-senha').addEventListener('keydown',function(e){if(e.key==='Enter')entrar();});
-  document.getElementById('c-s2').addEventListener('keydown',function(e){if(e.key==='Enter')cadastrar();});
-});
-</script>
-</body>
-</html>
+    if(btn){btn.disabled=false;btn.innerHTML='&#x2713; Salvo';btn.classList.add('sa
