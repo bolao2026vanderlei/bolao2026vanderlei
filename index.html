@@ -747,6 +747,9 @@ async function entrar(){
     if(res.data.senha!==senha){erro.textContent='Senha incorreta.';btn.disabled=false;btn.textContent='ENTRAR';return}
     USER={nome:res.data.nome,admin:res.data.admin||false};
   }
+  // Salva sessão no localStorage
+  localStorage.setItem('bolao_user', JSON.stringify({nome:USER.nome, admin:USER.admin}));
+
   document.getElementById('tela-login').style.display='none';
   document.getElementById('app').style.display='block';
   document.getElementById('unome').textContent=USER.nome;
@@ -758,6 +761,7 @@ async function entrar(){
 
 function sair(){
   USER=null;PALPS={};RESULS={};
+  localStorage.removeItem('bolao_user');
   document.getElementById('tela-login').style.display='flex';
   document.getElementById('app').style.display='none';
   document.getElementById('e-nome').value='';
@@ -881,7 +885,7 @@ function ir(s){
   document.getElementById('s-'+s).classList.add('on');
   document.getElementById('bn-'+s).classList.add('on');
   if(s==='inicio'){ atualizarRankCache().then(function(){ renderInicio(); }); }
-  if(s==='palpites')renderPalpites();
+  if(s==='palpites'){renderPalpites();}
   if(s==='ranking')renderRanking();
   if(s==='regras')renderRegras();
   if(s==='admin')renderAdmin();
@@ -890,7 +894,15 @@ function ir(s){
 
 // ── INICIO ────────────────────────────────────────────────────────────────────
 async function renderInicio(){
-  // Se cache de ranking ainda não foi carregado, busca agora
+  // Recarrega palpites e resultados do banco
+  try{
+    var rP = await dbFilter('palpites','usuario',USER.nome);
+    PALPS = {};
+    rP.forEach(function(p){ PALPS[p.jogo_id]={c:p.gol_casa,f:p.gol_fora}; });
+    var rR = await dbAll('resultados');
+    RESULS = {};
+    rR.forEach(function(r){ RESULS[r.jogo_id]={c:r.gol_casa,f:r.gol_fora}; });
+  }catch(e){ console.error('Erro reload:',e); }
   if(RANK_CACHE.total === 0 && USER){
     await atualizarRankCache();
   }
@@ -934,7 +946,15 @@ async function renderInicio(){
 }
 
 // ── PALPITES ──────────────────────────────────────────────────────────────────
-function renderPalpites(){
+async function renderPalpites(){
+  // Recarrega palpites do banco sempre que abre a aba
+  loading('Carregando palpites...');
+  try{
+    var rP = await dbFilter('palpites','usuario',USER.nome);
+    PALPS = {};
+    rP.forEach(function(p){ PALPS[p.jogo_id]={c:p.gol_casa,f:p.gol_fora}; });
+  }catch(e){ console.error('Erro ao carregar palpites:',e); }
+  finally{ noloading(); }
   document.getElementById('filtros').innerHTML=
     ['Todos'].concat(FASES).map(function(f){
       return '<button class="fbtn'+(FILTRO===f?' on':'')+'" onclick="setFiltro(\''+f+'\')">'+f+'</button>';
@@ -1978,9 +1998,43 @@ function toast(msg,tipo){
   TTIMER=setTimeout(function(){t.className='';},2600);
 }
 
-document.addEventListener('DOMContentLoaded',function(){
+document.addEventListener('DOMContentLoaded', async function(){
   document.getElementById('e-senha').addEventListener('keydown',function(e){if(e.key==='Enter')entrar();});
   document.getElementById('c-s2').addEventListener('keydown',function(e){if(e.key==='Enter')cadastrar();});
+
+  // Tenta login automático se houver sessão salva
+  var sessao = localStorage.getItem('bolao_user');
+  if(sessao){
+    try{
+      var u = JSON.parse(sessao);
+      if(u && u.nome){
+        // Verifica se o usuário ainda existe no banco
+        loading('Entrando automaticamente...');
+        var res = await dbSingle('usuarios','nome',u.nome);
+        noloading();
+        if(res.data){
+          USER = {nome: res.data.nome, admin: res.data.admin||false};
+          // Se for admin, verifica pelo nome especial
+          if(u.nome==='admin') USER = {nome:'admin', admin:true};
+          document.getElementById('tela-login').style.display='none';
+          document.getElementById('app').style.display='block';
+          document.getElementById('unome').textContent=USER.nome;
+          document.getElementById('uavatar').textContent=USER.nome[0].toUpperCase();
+          if(USER.admin) document.getElementById('bn-admin').style.display='flex';
+          await carregarDados();
+          await renderInicio();
+        } else {
+          // Usuário não existe mais — limpa sessão
+          localStorage.removeItem('bolao_user');
+          noloading();
+        }
+      }
+    } catch(e){
+      console.error('Erro auto-login:', e);
+      localStorage.removeItem('bolao_user');
+      noloading();
+    }
+  }
 });
 </script>
 </body>
