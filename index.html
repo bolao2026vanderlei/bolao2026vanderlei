@@ -406,9 +406,10 @@ body{font-family:'Barlow',sans-serif;background:var(--cinza);color:var(--texto);
     <div class="secao" id="s-ranking">
       <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:12px">
         <div class="sec-title" style="margin-bottom:0;flex:1">&#x1F3C6; Ranking</div>
-        <div style="display:flex;gap:6px">
+        <div style="display:flex;gap:6px;flex-wrap:wrap">
           <button class="btn-verde-sm" onclick="renderRanking()">&#x1F504; Atualizar</button>
           <button class="btn-verde-sm" style="background:var(--azul)" onclick="debugPontos()">&#x1F50D; Debug</button>
+          <button class="btn-verde-sm" style="background:#6B7280;font-size:11px" onclick="salvarPosicoes()" title="Salva as posicoes atuais como referencia para mostrar variacao">&#x1F4CD; Marcar posicoes</button>
         </div>
       </div>
 <div id="debug-box" style="display:none;background:var(--cinza2);border-radius:10px;padding:12px;margin-bottom:12px;font-size:12px;font-family:monospace;overflow-x:auto;white-space:pre"></div>
@@ -615,6 +616,7 @@ var BLOQUEIO_MIN = 10; // minutos antes do jogo
 // ── ESTADO ──────────────────────────────────────────────────────────────────
 var USER=null, PALPS={}, RESULS={}, FILTRO='Todos', DTIMER={}, TTIMER=null;
 var JOGOS_REABERTOS = {};
+var RANK_ANTERIOR = {}; // {nome: posicao} — snapshot do ranking anterior
 var JOGOS_ANULADOS = {9: true}; // Jogo #9 Alemanha x Curacao anulado por falha no cadastro // {jogoId: true} — jogo anulado, 0 pts para todos
 var JOGOS_HORARIO = {}; // overrides de data/hora admin: {jogoId: 'YYYY-MM-DDTHH:MM'} // admin pode forcar reabertura: {jogoId: true}
 
@@ -913,6 +915,19 @@ async function calcularRankCompleto(){
       posicoes.push(posAtual);
     }
   }
+
+  // Carrega ranking anterior do localStorage para calcular variação
+  try{
+    var rankSalvo = localStorage.getItem('bolao_rank_anterior');
+    if(rankSalvo) RANK_ANTERIOR = JSON.parse(rankSalvo);
+  }catch(e){}
+
+  // Salva ranking atual para próxima comparação (posicao + pontos)
+  var rankAtual = {};
+  for(var ri=0;ri<rank.length;ri++){
+    rankAtual[rank[ri].nome] = {pos: posicoes[ri], pts: rank[ri].total};
+  }
+  localStorage.setItem('bolao_rank_atual', JSON.stringify(rankAtual));
 
   // Atualiza cache de posição
   var minhaPos=0;
@@ -1565,6 +1580,15 @@ function renderRegras(){
 }
 
 // ── RANKING ───────────────────────────────────────────────────────────────────
+function salvarPosicoes(){
+  var atual = localStorage.getItem('bolao_rank_atual');
+  if(!atual){toast('Calcule o ranking primeiro!','err');return;}
+  localStorage.setItem('bolao_rank_anterior', atual);
+  RANK_ANTERIOR = JSON.parse(atual);
+  toast('Posicoes salvas como referencia!','ok');
+  renderRanking();
+}
+
 async function debugPontos(){
   var box = document.getElementById('debug-box');
   // Força exibição
@@ -1698,10 +1722,31 @@ async function renderRanking(){
     var pc = pos <= 5 ? 'rp' + pos : 'rpn';
     var isme=u.nome===USER.nome;
     var pct=mx>0?u.total/mx*100:0;
+    // Calcula variacao de posicao e pontos
+    var anterior = RANK_ANTERIOR[u.nome];
+    var variacaoHtml = '';
+    if(anterior){
+      var posAnt = anterior.pos || anterior; // compativel com formato antigo
+      var ptsAnt = anterior.pts || 0;
+      var diffPos = posAnt - pos; // positivo = subiu
+      var diffPts = u.total - ptsAnt; // pontos ganhos
+      var ptsPart = diffPts > 0 ? ' <span style="font-size:10px;color:#16A34A;font-weight:600">(+'+diffPts+'pts)</span>' : '';
+      if(diffPos > 0){
+        variacaoHtml = '<span style="color:#16A34A;font-size:11px;font-weight:700">&#x25B2;'+diffPos+'</span>'+ptsPart;
+      } else if(diffPos < 0){
+        variacaoHtml = '<span style="color:#DC2626;font-size:11px;font-weight:700">&#x25BC;'+Math.abs(diffPos)+'</span>'+ptsPart;
+      } else {
+        variacaoHtml = '<span style="color:#9CA3AF;font-size:11px">&#x2014;</span>'+ptsPart;
+      }
+    }
+
     return '<div class="rank-item'+(isme?' me':'')+'">'+
       '<div class="rank-pos '+pc+'">'+medal+'</div>'+
       '<div class="rank-info">'+
-        '<div class="rank-nome">'+u.nome+(isme?' <span style="font-size:10px;color:var(--verde)">(voce)</span>':'')+'</div>'+
+        '<div class="rank-nome" style="display:flex;align-items:center;gap:6px">'+
+          u.nome+(isme?' <span style="font-size:10px;color:var(--verde)">(voce)</span>':'')+
+          variacaoHtml+
+        '</div>'+
         '<div class="mbar"><div class="mbar-fill" style="width:'+pct+'%"></div></div>'+
         '<div class="rank-sub">'+u.acertos+' acertos &bull; '+u.exatos+' exatos &bull; '+u.np+' palpites</div>'+
       '</div>'+
