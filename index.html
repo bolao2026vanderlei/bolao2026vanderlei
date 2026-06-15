@@ -809,9 +809,15 @@ async function calcularRankCompleto(){
   RESULS={};rRes.forEach(function(r){RESULS[parseInt(r.jogo_id)]={c:parseInt(r.gol_casa),f:parseInt(r.gol_fora)};});
 
   var palMap={};
+  // Ordena por id para garantir que o mais recente (maior id) prevaleça
+  rPals.sort(function(a,b){return a.id-b.id;});
   rPals.forEach(function(p){
     if(!palMap[p.usuario])palMap[p.usuario]={};
-    palMap[p.usuario][parseInt(p.jogo_id)]={c:parseInt(p.gol_casa),f:parseInt(p.gol_fora)};
+    var gc=parseInt(p.gol_casa), gf=parseInt(p.gol_fora);
+    // Só atualiza se tiver valores válidos
+    if(!isNaN(gc)&&!isNaN(gf)){
+      palMap[p.usuario][parseInt(p.jogo_id)]={c:gc,f:gf};
+    }
   });
   // Atualiza palpites do usuário atual no cache local
   if(USER && palMap[USER.nome]){
@@ -995,7 +1001,7 @@ function jcard(j, editavel){
   // Pts tag
   var ptsHtml='';
   if(enc&&p.c!=null){
-    var pts=calcPts(fase,p.c,p.f,r.c,r.f);
+    var pts=calcPts(fase,p.c,p.f,r.c,r.f,id);
     if(pts===pe)ptsHtml='<span class="ptag exato">+'+pts+' Exato!</span>';
     else if(pts===pr)ptsHtml='<span class="ptag result">+'+pts+' Resultado</span>';
     else ptsHtml='<span class="ptag errou">0 pts</span>';
@@ -1252,7 +1258,7 @@ async function abrirModal(jogoId, event){
   var lista=usuarios.map(function(u){
     var pal=palMap[u.nome]||null;
     var pts=0;
-    if(pal&&r)pts=calcPts(j[2],pal.c,pal.f,r.c,r.f);
+    if(pal&&r)pts=calcPts(j[2],pal.c,pal.f,r.c,r.f,j[0]);
     return{nome:u.nome,pal:pal,pts:pts};
   });
 
@@ -1509,9 +1515,15 @@ async function renderRanking(){
     return;
   }
   var palMap={};
+  // Ordena por id para garantir que o mais recente (maior id) prevaleça
+  rPals.sort(function(a,b){return a.id-b.id;});
   rPals.forEach(function(p){
     if(!palMap[p.usuario])palMap[p.usuario]={};
-    palMap[p.usuario][parseInt(p.jogo_id)]={c:parseInt(p.gol_casa),f:parseInt(p.gol_fora)};
+    var gc=parseInt(p.gol_casa), gf=parseInt(p.gol_fora);
+    // Só atualiza se tiver valores válidos
+    if(!isNaN(gc)&&!isNaN(gf)){
+      palMap[p.usuario][parseInt(p.jogo_id)]={c:gc,f:gf};
+    }
   });
   var rank=usuarios.map(function(u){
     var pals=palMap[u.nome]||{};
