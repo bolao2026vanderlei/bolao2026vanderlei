@@ -692,8 +692,8 @@ function fmtData(str) {
 }
 
 // ── DB ───────────────────────────────────────────────────────────────────────
-async function dbAll(t)       { return (await SB.from(t).select('*')).data||[]; }
-async function dbFilter(t,k,v){ return (await SB.from(t).select('*').eq(k,v)).data||[]; }
+async function dbAll(t)       { return (await SB.from(t).select('*').limit(5000)).data||[]; }
+async function dbFilter(t,k,v){ return (await SB.from(t).select('*').eq(k,v).limit(5000)).data||[]; }
 async function dbSingle(t,k,v){ return await SB.from(t).select('*').eq(k,v).maybeSingle(); }
 async function dbUpsert(t,r,c){ return (await SB.from(t).upsert(r,{onConflict:c})).error||null; }
 async function dbInsert(t,r)  { return (await SB.from(t).insert(r)).error||null; }
