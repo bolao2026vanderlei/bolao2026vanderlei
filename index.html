@@ -405,8 +405,12 @@ body{font-family:'Barlow',sans-serif;background:var(--cinza);color:var(--texto);
     <div class="secao" id="s-ranking">
       <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:12px">
         <div class="sec-title" style="margin-bottom:0;flex:1">&#x1F3C6; Ranking</div>
-        <button class="btn-verde-sm" onclick="renderRanking()">&#x1F504; Atualizar</button>
+        <div style="display:flex;gap:6px">
+          <button class="btn-verde-sm" onclick="renderRanking()">&#x1F504; Atualizar</button>
+          <button class="btn-verde-sm" style="background:var(--azul)" onclick="debugPontos()">&#x1F50D; Debug</button>
+        </div>
       </div>
+      <div id="debug-box" style="display:none;background:var(--cinza2);border-radius:10px;padding:12px;margin-bottom:12px;font-size:12px;font-family:monospace;overflow-x:auto;white-space:pre"></div>
       <div id="div-ranking"></div>
     </div>
     <div class="secao" id="s-regras"></div>
@@ -1501,6 +1505,53 @@ function renderRegras(){
 }
 
 // ── RANKING ───────────────────────────────────────────────────────────────────
+async function debugPontos(){
+  var box = document.getElementById('debug-box');
+  box.style.display = box.style.display==='none' ? 'block' : 'none';
+  if(box.style.display==='none') return;
+
+  box.textContent = 'Carregando...';
+  var rRes = await dbAll('resultados');
+  var rPals = await dbAll('palpites');
+
+  var resMap = {};
+  rRes.forEach(function(r){ resMap[parseInt(r.jogo_id)]={c:parseInt(r.gol_casa),f:parseInt(r.gol_fora)}; });
+
+  var palMap = {};
+  rPals.sort(function(a,b){return a.id-b.id;});
+  rPals.forEach(function(p){
+    if(!palMap[p.usuario])palMap[p.usuario]={};
+    var gc=parseInt(p.gol_casa), gf=parseInt(p.gol_fora);
+    if(!isNaN(gc)&&!isNaN(gf)) palMap[p.usuario][parseInt(p.jogo_id)]={c:gc,f:gf};
+  });
+
+  var linhas = ['=== DEBUG PONTOS ===\n'];
+  var usuarios = Object.keys(palMap).sort();
+
+  usuarios.forEach(function(u){
+    var pals = palMap[u]||{};
+    var total=0, linhasU=[];
+    JOGOS.forEach(function(j){
+      var p=pals[j[0]], r=resMap[j[0]];
+      if(!p||!r) return;
+      var pts=calcPts(j[2],p.c,p.f,r.c,r.f,j[0]);
+      if(pts>0||JOGOS_ANULADOS[j[0]]){
+        total+=pts;
+        var status = JOGOS_ANULADOS[j[0]]?'ANULADO':
+          (pts===(PTS[j[2]]||[0,0])[1]?'EXATO':'resultado');
+        linhasU.push('  #'+j[0]+' '+j[5]+'x'+j[6]+
+          ' pal:'+p.c+'x'+p.f+' res:'+r.c+'x'+r.f+
+          ' = '+pts+'pts ('+status+')');
+      }
+    });
+    linhas.push(u+': '+total+'pts');
+    linhasU.forEach(function(l){linhas.push(l);});
+    linhas.push('');
+  });
+
+  box.textContent = linhas.join('\n');
+}
+
 async function renderRanking(){
   document.getElementById('div-ranking').innerHTML=
     '<div style="text-align:center;padding:40px;color:var(--texto3)"><span class="spin"></span> Calculando...</div>';
