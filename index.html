@@ -410,7 +410,7 @@ body{font-family:'Barlow',sans-serif;background:var(--cinza);color:var(--texto);
           <button class="btn-verde-sm" style="background:var(--azul)" onclick="debugPontos()">&#x1F50D; Debug</button>
         </div>
       </div>
-      <div id="debug-box" style="display:none;background:var(--cinza2);border-radius:10px;padding:12px;margin-bottom:12px;font-size:12px;font-family:monospace;overflow-x:auto;white-space:pre"></div>
+<div id="debug-box" style="display:none;background:var(--cinza2);border-radius:10px;padding:12px;margin-bottom:12px;font-size:12px;font-family:monospace;overflow-x:auto;white-space:pre"></div>
       <div id="div-ranking"></div>
     </div>
     <div class="secao" id="s-regras"></div>
@@ -1507,12 +1507,33 @@ function renderRegras(){
 // ── RANKING ───────────────────────────────────────────────────────────────────
 async function debugPontos(){
   var box = document.getElementById('debug-box');
-  box.style.display = box.style.display==='none' ? 'block' : 'none';
-  if(box.style.display==='none') return;
+  // Força exibição
+  box.style.display = 'block';
+  box.style.position = 'fixed';
+  box.style.top = '60px';
+  box.style.left = '10px';
+  box.style.right = '10px';
+  box.style.zIndex = '500';
+  box.style.maxHeight = '70vh';
+  box.style.overflowY = 'auto';
+  box.style.border = '2px solid var(--azul)';
+  box.style.boxShadow = '0 4px 20px rgba(0,0,0,.3)';
+  // Botão fechar
+  box.innerHTML = '<button onclick="var b=document.getElementById(\x27debug-box\x27);b.style.display=\x27none\x27" style="float:right;padding:4px 10px;border-radius:6px;border:none;background:var(--vermelho);color:#fff;cursor:pointer;margin-bottom:8px">✕ Fechar</button><br>';
 
   box.textContent = 'Carregando...';
   var rRes = await dbAll('resultados');
   var rPals = await dbAll('palpites');
+
+  // Teste direto: mostra o que veio do banco
+  var res11 = rRes.find(function(r){return r.jogo_id===11||r.jogo_id==='11';});
+  var pal11varti = rPals.find(function(p){
+    return (p.usuario==='Varti')&&(p.jogo_id===11||p.jogo_id==='11');
+  });
+  console.log('BANCO resultado #11:', JSON.stringify(res11));
+  console.log('BANCO palpite Varti #11:', JSON.stringify(pal11varti));
+  console.log('Total resultados:', rRes.length);
+  console.log('IDs resultados:', rRes.map(function(r){return r.jogo_id;}));
 
   var resMap = {};
   rRes.forEach(function(r){ resMap[parseInt(r.jogo_id)]={c:parseInt(r.gol_casa),f:parseInt(r.gol_fora)}; });
@@ -1525,7 +1546,10 @@ async function debugPontos(){
     if(!isNaN(gc)&&!isNaN(gf)) palMap[p.usuario][parseInt(p.jogo_id)]={c:gc,f:gf};
   });
 
-  var linhas = ['=== DEBUG PONTOS ===\n'];
+  var linhas = ['=== DEBUG PONTOS ==='];
+  linhas.push('Resultados no banco: '+rRes.length+' jogos');
+  linhas.push('IDs: '+rRes.map(function(r){return parseInt(r.jogo_id);}).join(','));
+  linhas.push('');
   var usuarios = Object.keys(palMap).sort();
 
   usuarios.forEach(function(u){
@@ -1533,23 +1557,29 @@ async function debugPontos(){
     var total=0, linhasU=[];
     JOGOS.forEach(function(j){
       var p=pals[j[0]], r=resMap[j[0]];
+      if(j[0]===11) console.log('DEBUG #11:',
+        'p=',JSON.stringify(p),
+        'r=',JSON.stringify(r),
+        'pals keys=',Object.keys(pals),
+        'resMap[11]=',resMap[11]
+      );
       if(!p||!r) return;
       var pts=calcPts(j[2],p.c,p.f,r.c,r.f,j[0]);
-      if(pts>0||JOGOS_ANULADOS[j[0]]){
-        total+=pts;
-        var status = JOGOS_ANULADOS[j[0]]?'ANULADO':
-          (pts===(PTS[j[2]]||[0,0])[1]?'EXATO':'resultado');
-        linhasU.push('  #'+j[0]+' '+j[5]+'x'+j[6]+
-          ' pal:'+p.c+'x'+p.f+' res:'+r.c+'x'+r.f+
-          ' = '+pts+'pts ('+status+')');
-      }
+      total+=pts;
+      var status = JOGOS_ANULADOS[j[0]]?'ANULADO':
+        pts===(PTS[j[2]]||[0,0])[1]?'EXATO':
+        pts===(PTS[j[2]]||[0,0])[0]?'resultado':'errou';
+      linhasU.push('  #'+j[0]+' '+j[5].slice(0,6)+'x'+j[6].slice(0,6)+
+        ' pal:'+p.c+'x'+p.f+' res:'+r.c+'x'+r.f+
+        ' = '+pts+'pts ('+status+')');
     });
     linhas.push(u+': '+total+'pts');
     linhasU.forEach(function(l){linhas.push(l);});
     linhas.push('');
   });
 
-  box.textContent = linhas.join('\n');
+  box.innerHTML += '<pre style="margin:0;font-size:11px">' + 
+    linhas.join('\n').replace(/</g,'&lt;') + '</pre>';
 }
 
 async function renderRanking(){
