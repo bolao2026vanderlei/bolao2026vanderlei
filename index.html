@@ -1085,6 +1085,23 @@ async function renderPalpites(){
   var lista=FILTRO==='Todos'?JOGOS:JOGOS.filter(function(j){return j[2]===FILTRO;});
   document.getElementById('lista-palpites').innerHTML=
     lista.map(function(j){return jcard(j,true);}).join('');
+
+  // Scroll automático para o próximo jogo aberto ou fechando
+  setTimeout(function(){
+    var cards = document.querySelectorAll('#lista-palpites .jcard');
+    var alvo = null;
+    for(var i=0; i<cards.length; i++){
+      var c = cards[i];
+      if(!c.classList.contains('enc')){
+        alvo = c;
+        break;
+      }
+    }
+    if(alvo){
+      alvo.scrollIntoView({behavior:'smooth', block:'start'});
+      window.scrollBy(0, -70);
+    }
+  }, 200);
 }
 function setFiltro(f){FILTRO=f;renderPalpites();}
 
