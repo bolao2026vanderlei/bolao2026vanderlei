@@ -519,9 +519,9 @@ var JOGOS = [
   [14,'2026-06-15T16:00','Fase de Grupos','G','Seattle','Belgica','Egito'],
   [15,'2026-06-15T19:00','Fase de Grupos','H','Miami','Arabia Saudita','Uruguai'],
   [16,'2026-06-15T22:00','Fase de Grupos','G','Los Angeles','Ira','Nova Zelandia'],
-  [17,'2026-06-16T14:00','Fase de Grupos','J','Kansas City','Argentina','Argelia'],
   [18,'2026-06-16T16:00','Fase de Grupos','I','Nova York','Franca','Senegal'],
   [19,'2026-06-16T19:00','Fase de Grupos','I','Boston','Iraque','Noruega'],
+  [17, '2026-06-16T22:00','Fase de Grupos','J','Kansas City','Argentina','Argelia'],
   [20,'2026-06-17T01:00','Fase de Grupos','J','Sao Francisco','Austria','Jordania'],
   [21,'2026-06-17T14:00','Fase de Grupos','K','Houston','Portugal','RD Congo'],
   [22,'2026-06-17T17:00','Fase de Grupos','L','Dallas','Inglaterra','Croacia'],
@@ -801,12 +801,34 @@ async function entrar(){
   // Salva sessão no localStorage
   localStorage.setItem('bolao_user', JSON.stringify({nome:USER.nome, admin:USER.admin}));
 
+  // Limpa cache de dados antigos para forçar recarga do Supabase
+  PALPS = {};
+  RESULS = {};
+  RANK_CACHE = {total:0, acertos:0, exatos:0, ts:0};
+
   document.getElementById('tela-login').style.display='none';
   document.getElementById('app').style.display='block';
   document.getElementById('unome').textContent=USER.nome;
   document.getElementById('uavatar').textContent=USER.nome[0].toUpperCase();
   if(USER.admin)document.getElementById('bn-admin').style.display='flex';
-  await carregarDados();
+
+  // Força recarregamento completo do banco
+  loading('Sincronizando dados...');
+  try{
+    var rP = await dbFilter('palpites','usuario',USER.nome);
+    rP.forEach(function(p){
+      var gc=parseInt(p.gol_casa), gf=parseInt(p.gol_fora);
+      if(p.gol_casa!=null&&p.gol_fora!=null&&!isNaN(gc)&&!isNaN(gf)){
+        PALPS[parseInt(p.jogo_id)]={c:gc,f:gf};
+      }
+    });
+    var rR = await dbAll('resultados');
+    rR.forEach(function(r){
+      RESULS[parseInt(r.jogo_id)]={c:parseInt(r.gol_casa),f:parseInt(r.gol_fora)};
+    });
+  }catch(e){ console.error('Erro sync:', e); }
+  finally{ noloading(); }
+
   await renderInicio();
 }
 
@@ -1666,17 +1688,20 @@ async function debugPontos(){
     var total=0, linhasU=[];
     JOGOS.forEach(function(j){
       var p=pals[j[0]], r=resMap[j[0]];
-      if(j[0]===11) console.log('DEBUG #11:',
-        'p=',JSON.stringify(p),
-        'r=',JSON.stringify(r),
-        'pals keys=',Object.keys(pals),
-        'resMap[11]=',resMap[11]
-      );
-      if(!p||!r) return;
+      if(!r) return; // sem resultado ainda — pula
+      if(JOGOS_ANULADOS[j[0]]){
+        linhasU.push('  #'+j[0]+' '+j[5].slice(0,6)+'x'+j[6].slice(0,6)+
+          ' [ANULADO] = 0pts');
+        return;
+      }
+      if(!p){
+        linhasU.push('  #'+j[0]+' '+j[5].slice(0,6)+'x'+j[6].slice(0,6)+
+          ' [SEM PALPITE] res:'+r.c+'x'+r.f+' = 0pts');
+        return;
+      }
       var pts=calcPts(j[2],p.c,p.f,r.c,r.f,j[0]);
       total+=pts;
-      var status = JOGOS_ANULADOS[j[0]]?'ANULADO':
-        pts===(PTS[j[2]]||[0,0])[1]?'EXATO':
+      var status = pts===(PTS[j[2]]||[0,0])[1]?'EXATO':
         pts===(PTS[j[2]]||[0,0])[0]?'resultado':'errou';
       linhasU.push('  #'+j[0]+' '+j[5].slice(0,6)+'x'+j[6].slice(0,6)+
         ' pal:'+p.c+'x'+p.f+' res:'+r.c+'x'+r.f+
@@ -2284,12 +2309,28 @@ document.addEventListener('DOMContentLoaded', async function(){
         if(res.data){
           USER = {nome: res.data.nome, admin: res.data.admin||false};
           if(u.nome==='admin') USER = {nome:'admin', admin:true};
+          PALPS={}; RESULS={};
+          RANK_CACHE={total:0,acertos:0,exatos:0,ts:0};
           document.getElementById('tela-login').style.display='none';
           document.getElementById('app').style.display='block';
           document.getElementById('unome').textContent=USER.nome;
           document.getElementById('uavatar').textContent=USER.nome[0].toUpperCase();
           if(USER.admin) document.getElementById('bn-admin').style.display='flex';
-          await carregarDados();
+          loading('Sincronizando dados...');
+          try{
+            var rP2=await dbFilter('palpites','usuario',USER.nome);
+            rP2.forEach(function(p){
+              var gc=parseInt(p.gol_casa),gf=parseInt(p.gol_fora);
+              if(p.gol_casa!=null&&p.gol_fora!=null&&!isNaN(gc)&&!isNaN(gf)){
+                PALPS[parseInt(p.jogo_id)]={c:gc,f:gf};
+              }
+            });
+            var rR2=await dbAll('resultados');
+            rR2.forEach(function(r){
+              RESULS[parseInt(r.jogo_id)]={c:parseInt(r.gol_casa),f:parseInt(r.gol_fora)};
+            });
+          }catch(e){ console.error('Erro sync auto:', e); }
+          finally{ noloading(); }
           await renderInicio();
         } else {
           // Usuário não existe mais — limpa sessão
