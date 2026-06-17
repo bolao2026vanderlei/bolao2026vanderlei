@@ -1640,7 +1640,6 @@ function renderRegras(){
 
 // ── RANKING ───────────────────────────────────────────────────────────────────
 async function gerarImagemRanking(){
-  // Busca ranking completo
   var rRes = await dbAll('resultados');
   var rPals = await dbAll('palpites');
   var rUsr = await SB.from('usuarios').select('nome').neq('nome','admin');
@@ -1659,11 +1658,10 @@ async function gerarImagemRanking(){
     }
   });
 
-  // Calcula pontos
-  var rank = usuarios.map(function(nome){
-    var pals=palMap[nome]||{}, total=0, exatos=0, acertos=0;
+  var rank=usuarios.map(function(nome){
+    var pals=palMap[nome]||{},total=0,exatos=0,acertos=0;
     JOGOS.forEach(function(j){
-      var p=pals[j[0]], r=resMap[j[0]];
+      var p=pals[j[0]],r=resMap[j[0]];
       if(!p||!r)return;
       var pts=calcPts(j[2],p.c,p.f,r.c,r.f,j[0]);
       if(pts>0){total+=pts;acertos++;if(pts===(PTS[j[2]]||[0,0])[1])exatos++;}
@@ -1672,7 +1670,6 @@ async function gerarImagemRanking(){
   });
   rank.sort(function(a,b){return b.total-a.total||b.exatos-a.exatos||b.acertos-a.acertos||a.nome.localeCompare(b.nome,'pt');});
 
-  // Calcula posições com empate
   var posicoes=[];
   for(var i=0;i<rank.length;i++){
     if(i>0&&rank[i].total===rank[i-1].total&&rank[i].exatos===rank[i-1].exatos&&rank[i].acertos===rank[i-1].acertos){
@@ -1680,117 +1677,150 @@ async function gerarImagemRanking(){
     } else { posicoes.push(i+1); }
   }
 
-  // Cria canvas 1920x1080 (16x9)
-  var W=1920, H=1080;
-  var canvas = document.createElement('canvas');
-  canvas.width=W; canvas.height=H;
-  var ctx = canvas.getContext('2d');
+  var W=1080,H=1920;
+  var canvas=document.createElement('canvas');
+  canvas.width=W;canvas.height=H;
+  var ctx=canvas.getContext('2d');
 
-  // Fundo gradiente
-  var grad = ctx.createLinearGradient(0,0,W,H);
-  grad.addColorStop(0,'#0B1E3D');
-  grad.addColorStop(0.5,'#1a3a6c');
-  grad.addColorStop(1,'#0B1E3D');
+  // Fundo
+  var grad=ctx.createLinearGradient(0,0,0,H);
+  grad.addColorStop(0,'#071526');
+  grad.addColorStop(0.5,'#0f2a4a');
+  grad.addColorStop(1,'#071526');
   ctx.fillStyle=grad;
   ctx.fillRect(0,0,W,H);
 
-  // Grade pontilhada
-  ctx.fillStyle='rgba(255,255,255,0.03)';
-  for(var xi=0;xi<W;xi+=40){
-    for(var yi=0;yi<H;yi+=40){
+  // Pontilhado
+  ctx.fillStyle='rgba(255,255,255,0.035)';
+  for(var xi=0;xi<W;xi+=45){
+    for(var yi=0;yi<H;yi+=45){
       ctx.beginPath();ctx.arc(xi,yi,2,0,Math.PI*2);ctx.fill();
     }
   }
 
-  // Bordas coloridas
-  var borda = ctx.createLinearGradient(0,0,0,H);
-  borda.addColorStop(0,'#FFD700');borda.addColorStop(0.5,'#00A36C');borda.addColorStop(1,'#003580');
-  ctx.fillStyle=borda;ctx.fillRect(0,0,12,H);ctx.fillRect(W-12,0,12,H);
-  var bordaH = ctx.createLinearGradient(0,0,W,0);
-  bordaH.addColorStop(0,'#FFD700');bordaH.addColorStop(0.5,'#00A36C');bordaH.addColorStop(1,'#003580');
-  ctx.fillStyle=bordaH;ctx.fillRect(12,0,W-24,10);ctx.fillRect(12,H-10,W-24,10);
+  // Bordas Copa
+  var bL=ctx.createLinearGradient(0,0,0,H);
+  bL.addColorStop(0,'#FFD700');bL.addColorStop(0.5,'#00A36C');bL.addColorStop(1,'#003580');
+  ctx.fillStyle=bL;ctx.fillRect(0,0,12,H);ctx.fillRect(W-12,0,12,H);
+  var bT=ctx.createLinearGradient(0,0,W,0);
+  bT.addColorStop(0,'#FFD700');bT.addColorStop(0.5,'#00A36C');bT.addColorStop(1,'#003580');
+  ctx.fillStyle=bT;ctx.fillRect(12,0,W-24,10);ctx.fillRect(12,H-10,W-24,10);
 
-  // Título
+  // HEADER
   ctx.textAlign='center';
   ctx.fillStyle='#FFD700';
-  ctx.font='bold 64px Arial';
-  ctx.fillText('RANKING — BOLAO COPA 2026', W/2, 80);
+  ctx.font='bold 72px Arial';
+  ctx.fillText('RANKING', W/2, 100);
 
-  // Linha separadora
-  ctx.strokeStyle='rgba(255,215,0,0.3)';ctx.lineWidth=2;
-  ctx.beginPath();ctx.moveTo(80,100);ctx.lineTo(W-80,100);ctx.stroke();
-
-  // Jogos disputados
-  var jogosDisp = Object.keys(resMap).length;
   ctx.fillStyle='rgba(255,255,255,0.5)';
-  ctx.font='28px Arial';
-  ctx.fillText(jogosDisp+' jogos disputados  •  '+rank.length+' participantes', W/2, 138);
+  ctx.font='26px Arial';
+  ctx.fillText('Bolao Copa do Mundo 2026', W/2, 140);
 
-  // Layout: 2 colunas
-  var col = Math.ceil(rank.length/2);
-  var itemH = (H-180) / col;
-  itemH = Math.min(itemH, 42);
-  var startY = 170;
-  var colW = (W-160)/2;
+  ctx.fillStyle='rgba(255,215,0,0.35)';
+  ctx.fillRect(60,158,W-120,2);
 
-  var medalhas = ['','','',''];
-  var cores = ['#FFD700','#C0C0C0','#CD7F32','rgba(255,255,255,0.7)'];
+  var jogosDisp=Object.keys(resMap).length;
+  ctx.fillStyle='rgba(255,255,255,0.38)';
+  ctx.font='22px Arial';
+  ctx.fillText(jogosDisp+' jogos disputados  \u2022  '+rank.length+' participantes', W/2, 186);
 
-  for(var i=0;i<rank.length;i++){
-    var u = rank[i];
-    var pos = posicoes[i];
-    var col_idx = i < col ? 0 : 1;
-    var row = i < col ? i : i-col;
-    var x = 80 + col_idx*(colW+80);
-    var y = startY + row*itemH;
+  // Cores para os 5 primeiros (uma por posicao)
+  var coresTop=[
+    {bg:'rgba(255,215,0,0.22)',  borda:'#FFD700',       texto:'#FFD700'},   // 1o ouro
+    {bg:'rgba(99,220,255,0.16)', borda:'#63DCFF',       texto:'#63DCFF'},   // 2o azul claro
+    {bg:'rgba(0,210,120,0.16)',  borda:'#00D278',       texto:'#00D278'},   // 3o verde
+    {bg:'rgba(255,140,0,0.16)',  borda:'#FF8C00',       texto:'#FF8C00'},   // 4o laranja
+    {bg:'rgba(220,80,220,0.16)', borda:'#DC50DC',       texto:'#DC50DC'},   // 5o roxo
+  ];
 
-    // Fundo do item
-    var alpha = i===0?0.2:i<3?0.12:0.06;
-    ctx.fillStyle='rgba(255,255,255,'+alpha+')';
+  // GRID 2 COLUNAS
+  var PAD=16,GAP=10;
+  var colW=(W-PAD*2-GAP)/2;
+  var startY=200;
+  var availH=H-startY-55;
+  var n=rank.length;
+  var nRows=Math.ceil(n/2);
+  var itemH=Math.floor(availH/nRows);
+  itemH=Math.min(itemH,74);
+
+  var fPos =Math.round(itemH*0.30);
+  var fNome=Math.round(itemH*0.27);
+  var fPts =Math.round(itemH*0.34);
+
+  for(var i=0;i<n;i++){
+    var u=rank[i];
+    var pos=posicoes[i];
+    var isTop=pos<=5;
+    var colIdx=i<nRows?0:1;
+    var row=i<nRows?i:i-nRows;
+    var x=PAD+colIdx*(colW+GAP);
+    var y=startY+row*itemH;
+    var midY=y+itemH/2+2;
+
+    var cor=isTop?coresTop[pos-1]:null;
+
+    // Fundo item
+    if(isTop){
+      ctx.fillStyle=cor.bg;
+    } else {
+      ctx.fillStyle='rgba(255,255,255,0.05)';
+    }
     ctx.beginPath();
-    ctx.roundRect(x,y-itemH*0.75,colW,itemH*0.9,8);
+    if(ctx.roundRect){ctx.roundRect(x+2,y+3,colW-4,itemH-6,8);}
+    else{ctx.rect(x+2,y+3,colW-4,itemH-6);}
     ctx.fill();
 
-    // Posição
-    var corPos = pos<=3?cores[pos-1]:cores[3];
-    ctx.fillStyle=corPos;
-    ctx.font='bold '+(itemH*0.5)+'px Arial';
+    // Borda esquerda colorida
+    ctx.fillStyle=isTop?cor.borda:'rgba(255,255,255,0.10)';
+    ctx.beginPath();
+    if(ctx.roundRect){ctx.roundRect(x+2,y+3,5,itemH-6,4);}
+    else{ctx.rect(x+2,y+3,5,itemH-6);}
+    ctx.fill();
+
+    // Posicao
+    ctx.fillStyle=isTop?cor.texto:'rgba(255,255,255,0.40)';
+    ctx.font='bold '+fPos+'px Arial';
     ctx.textAlign='left';
-    ctx.fillText(pos+'º', x+10, y-itemH*0.15);
+    ctx.fillText(pos+'o', x+12, midY+fPos*0.38);
 
     // Nome
-    ctx.fillStyle=i===0?'#FFD700':'rgba(255,255,255,0.9)';
-    ctx.font=(i<3?'bold ':'')+(itemH*0.42)+'px Arial';
-    ctx.fillText(u.nome, x+60, y-itemH*0.15);
+    var nX=x+fPos*1.6+14;
+    var nomeMaxW=colW-fPos*1.6-fPts*2.7-20;
+    ctx.fillStyle=isTop?cor.texto:'rgba(255,255,255,0.78)';
+    ctx.font=(isTop?'bold ':'')+fNome+'px Arial';
+    ctx.textAlign='left';
+    var ns=u.nome;
+    while(ctx.measureText(ns).width>nomeMaxW&&ns.length>3) ns=ns.slice(0,-1);
+    if(ns!==u.nome) ns+='.';
+    ctx.fillText(ns, nX, midY+fNome*0.38);
 
     // Pontos
+    ctx.fillStyle=isTop?cor.texto:'rgba(255,255,255,0.65)';
+    ctx.font='bold '+fPts+'px Arial';
     ctx.textAlign='right';
-    ctx.fillStyle=i===0?'#FFD700':'rgba(255,255,255,0.85)';
-    ctx.font='bold '+(itemH*0.52)+'px Arial';
-    ctx.fillText(u.total+'pts', x+colW-10, y-itemH*0.15);
-    ctx.textAlign='left';
+    ctx.fillText(u.total+'pts', x+colW-8, midY+fPts*0.38);
   }
 
-  // Rodapé
-  var hoje = new Date().toLocaleDateString('pt-BR');
-  ctx.fillStyle='rgba(255,255,255,0.3)';
-  ctx.font='22px Arial';
+  // Rodape
+  var hoje=new Date().toLocaleDateString('pt-BR',{day:'2-digit',month:'2-digit',year:'numeric'});
+  var hora=new Date().toLocaleTimeString('pt-BR',{hour:'2-digit',minute:'2-digit'});
+  ctx.fillStyle='rgba(255,255,255,0.25)';
+  ctx.font='20px Arial';
   ctx.textAlign='center';
-  ctx.fillText('Atualizado em '+hoje+' • Bolao Copa do Mundo 2026', W/2, H-30);
+  ctx.fillText('Atualizado '+hoje+' as '+hora, W/2, H-26);
 
-  // Download
-  var link = document.createElement('a');
-  link.download = 'ranking_bolao_'+hoje.replace(/\//g,'-')+'.png';
-  link.href = canvas.toDataURL('image/png');
+  var link=document.createElement('a');
+  link.download='ranking_bolao_'+hoje.replace(/\//g,'-')+'.png';
+  link.href=canvas.toDataURL('image/png');
   link.click();
 
-  // Preview
-  canvas.style.cssText='width:100%;border-radius:8px;margin-top:8px';
-  var prev = document.getElementById('preview-ranking');
+  canvas.style.cssText='width:100%;max-width:320px;border-radius:10px;margin-top:10px;display:block';
+  var prev=document.getElementById('preview-ranking');
   prev.innerHTML='';
   prev.appendChild(canvas);
-  toast('Imagem gerada e baixada!','ok');
+  toast('Imagem 9x16 gerada!','ok');
 }
+
 
 function salvarPosicoes(){
   var atual = localStorage.getItem('bolao_rank_atual');
