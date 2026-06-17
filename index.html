@@ -409,7 +409,6 @@ body{font-family:'Barlow',sans-serif;background:var(--cinza);color:var(--texto);
         <div style="display:flex;gap:6px;flex-wrap:wrap">
           <button class="btn-verde-sm" onclick="renderRanking()">&#x1F504; Atualizar</button>
           <button class="btn-verde-sm" style="background:var(--azul)" onclick="debugPontos()">&#x1F50D; Debug</button>
-          <button class="btn-verde-sm" style="background:#6B7280;font-size:11px" onclick="salvarPosicoes()" title="Salva as posicoes atuais como referencia para mostrar variacao">&#x1F4CD; Marcar posicoes</button>
         </div>
       </div>
 <div id="debug-box" style="display:none;background:var(--cinza2);border-radius:10px;padding:12px;margin-bottom:12px;font-size:12px;font-family:monospace;overflow-x:auto;white-space:pre"></div>
@@ -1086,22 +1085,17 @@ async function renderPalpites(){
   document.getElementById('lista-palpites').innerHTML=
     lista.map(function(j){return jcard(j,true);}).join('');
 
-  // Scroll automático para o próximo jogo aberto ou fechando
+  // Scroll automático para o próximo jogo aberto, fechando ou bloqueado
   setTimeout(function(){
-    var cards = document.querySelectorAll('#lista-palpites .jcard');
-    var alvo = null;
-    for(var i=0; i<cards.length; i++){
-      var c = cards[i];
-      if(!c.classList.contains('enc')){
-        alvo = c;
-        break;
-      }
-    }
+    // Primeiro tenta achar jogo aberto ou fechando
+    var alvo = document.querySelector('#lista-palpites [data-status="aberto"]') ||
+               document.querySelector('#lista-palpites [data-status="fechando"]') ||
+               document.querySelector('#lista-palpites [data-status="bloqueado"]');
     if(alvo){
       alvo.scrollIntoView({behavior:'smooth', block:'start'});
-      window.scrollBy(0, -70);
+      setTimeout(function(){ window.scrollBy(0,-70); }, 300);
     }
-  }, 200);
+  }, 300);
 }
 function setFiltro(f){FILTRO=f;renderPalpites();}
 
@@ -1217,7 +1211,8 @@ function jcard(j, editavel){
     (locked&&!enc?' bloqueado':'')+((enc||locked)?' clicavel':'')+
     (JOGOS_ANULADOS[id]?' anulado':'');
 
-  return '<div class="'+cardClass+'">'+
+  var dataStatus = enc?'encerrado':(st==='bloqueado'?'bloqueado':(st==='fechando'?'fechando':'aberto'));
+  return '<div class="'+cardClass+'" data-status="'+dataStatus+'" data-jogo="'+id+'">'+
     '<div class="jcard-top">'+
       '<span class="jcard-fase '+faseClass(fase)+'">'+fab+'</span>'+
       '<span class="jcard-meta">'+dataFmt+(isBrasil?' &#x1F1E7;&#x1F1F7;':'')+'</span>'+
@@ -1644,6 +1639,159 @@ function renderRegras(){
 }
 
 // ── RANKING ───────────────────────────────────────────────────────────────────
+async function gerarImagemRanking(){
+  // Busca ranking completo
+  var rRes = await dbAll('resultados');
+  var rPals = await dbAll('palpites');
+  var rUsr = await SB.from('usuarios').select('nome').neq('nome','admin');
+  var usuarios = (rUsr.data||[]).map(function(u){return u.nome;});
+
+  var resMap={};
+  rRes.forEach(function(r){resMap[parseInt(r.jogo_id)]={c:parseInt(r.gol_casa),f:parseInt(r.gol_fora)};});
+
+  var palMap={};
+  rPals.sort(function(a,b){return a.id-b.id;});
+  rPals.forEach(function(p){
+    if(!palMap[p.usuario])palMap[p.usuario]={};
+    var gc=parseInt(p.gol_casa),gf=parseInt(p.gol_fora);
+    if(p.gol_casa!=null&&p.gol_fora!=null&&!isNaN(gc)&&!isNaN(gf)){
+      palMap[p.usuario][parseInt(p.jogo_id)]={c:gc,f:gf};
+    }
+  });
+
+  // Calcula pontos
+  var rank = usuarios.map(function(nome){
+    var pals=palMap[nome]||{}, total=0, exatos=0, acertos=0;
+    JOGOS.forEach(function(j){
+      var p=pals[j[0]], r=resMap[j[0]];
+      if(!p||!r)return;
+      var pts=calcPts(j[2],p.c,p.f,r.c,r.f,j[0]);
+      if(pts>0){total+=pts;acertos++;if(pts===(PTS[j[2]]||[0,0])[1])exatos++;}
+    });
+    return{nome:nome,total:total,exatos:exatos,acertos:acertos};
+  });
+  rank.sort(function(a,b){return b.total-a.total||b.exatos-a.exatos||b.acertos-a.acertos||a.nome.localeCompare(b.nome,'pt');});
+
+  // Calcula posições com empate
+  var posicoes=[];
+  for(var i=0;i<rank.length;i++){
+    if(i>0&&rank[i].total===rank[i-1].total&&rank[i].exatos===rank[i-1].exatos&&rank[i].acertos===rank[i-1].acertos){
+      posicoes.push(posicoes[i-1]);
+    } else { posicoes.push(i+1); }
+  }
+
+  // Cria canvas 1920x1080 (16x9)
+  var W=1920, H=1080;
+  var canvas = document.createElement('canvas');
+  canvas.width=W; canvas.height=H;
+  var ctx = canvas.getContext('2d');
+
+  // Fundo gradiente
+  var grad = ctx.createLinearGradient(0,0,W,H);
+  grad.addColorStop(0,'#0B1E3D');
+  grad.addColorStop(0.5,'#1a3a6c');
+  grad.addColorStop(1,'#0B1E3D');
+  ctx.fillStyle=grad;
+  ctx.fillRect(0,0,W,H);
+
+  // Grade pontilhada
+  ctx.fillStyle='rgba(255,255,255,0.03)';
+  for(var xi=0;xi<W;xi+=40){
+    for(var yi=0;yi<H;yi+=40){
+      ctx.beginPath();ctx.arc(xi,yi,2,0,Math.PI*2);ctx.fill();
+    }
+  }
+
+  // Bordas coloridas
+  var borda = ctx.createLinearGradient(0,0,0,H);
+  borda.addColorStop(0,'#FFD700');borda.addColorStop(0.5,'#00A36C');borda.addColorStop(1,'#003580');
+  ctx.fillStyle=borda;ctx.fillRect(0,0,12,H);ctx.fillRect(W-12,0,12,H);
+  var bordaH = ctx.createLinearGradient(0,0,W,0);
+  bordaH.addColorStop(0,'#FFD700');bordaH.addColorStop(0.5,'#00A36C');bordaH.addColorStop(1,'#003580');
+  ctx.fillStyle=bordaH;ctx.fillRect(12,0,W-24,10);ctx.fillRect(12,H-10,W-24,10);
+
+  // Título
+  ctx.textAlign='center';
+  ctx.fillStyle='#FFD700';
+  ctx.font='bold 64px Arial';
+  ctx.fillText('RANKING — BOLAO COPA 2026', W/2, 80);
+
+  // Linha separadora
+  ctx.strokeStyle='rgba(255,215,0,0.3)';ctx.lineWidth=2;
+  ctx.beginPath();ctx.moveTo(80,100);ctx.lineTo(W-80,100);ctx.stroke();
+
+  // Jogos disputados
+  var jogosDisp = Object.keys(resMap).length;
+  ctx.fillStyle='rgba(255,255,255,0.5)';
+  ctx.font='28px Arial';
+  ctx.fillText(jogosDisp+' jogos disputados  •  '+rank.length+' participantes', W/2, 138);
+
+  // Layout: 2 colunas
+  var col = Math.ceil(rank.length/2);
+  var itemH = (H-180) / col;
+  itemH = Math.min(itemH, 42);
+  var startY = 170;
+  var colW = (W-160)/2;
+
+  var medalhas = ['','','',''];
+  var cores = ['#FFD700','#C0C0C0','#CD7F32','rgba(255,255,255,0.7)'];
+
+  for(var i=0;i<rank.length;i++){
+    var u = rank[i];
+    var pos = posicoes[i];
+    var col_idx = i < col ? 0 : 1;
+    var row = i < col ? i : i-col;
+    var x = 80 + col_idx*(colW+80);
+    var y = startY + row*itemH;
+
+    // Fundo do item
+    var alpha = i===0?0.2:i<3?0.12:0.06;
+    ctx.fillStyle='rgba(255,255,255,'+alpha+')';
+    ctx.beginPath();
+    ctx.roundRect(x,y-itemH*0.75,colW,itemH*0.9,8);
+    ctx.fill();
+
+    // Posição
+    var corPos = pos<=3?cores[pos-1]:cores[3];
+    ctx.fillStyle=corPos;
+    ctx.font='bold '+(itemH*0.5)+'px Arial';
+    ctx.textAlign='left';
+    ctx.fillText(pos+'º', x+10, y-itemH*0.15);
+
+    // Nome
+    ctx.fillStyle=i===0?'#FFD700':'rgba(255,255,255,0.9)';
+    ctx.font=(i<3?'bold ':'')+(itemH*0.42)+'px Arial';
+    ctx.fillText(u.nome, x+60, y-itemH*0.15);
+
+    // Pontos
+    ctx.textAlign='right';
+    ctx.fillStyle=i===0?'#FFD700':'rgba(255,255,255,0.85)';
+    ctx.font='bold '+(itemH*0.52)+'px Arial';
+    ctx.fillText(u.total+'pts', x+colW-10, y-itemH*0.15);
+    ctx.textAlign='left';
+  }
+
+  // Rodapé
+  var hoje = new Date().toLocaleDateString('pt-BR');
+  ctx.fillStyle='rgba(255,255,255,0.3)';
+  ctx.font='22px Arial';
+  ctx.textAlign='center';
+  ctx.fillText('Atualizado em '+hoje+' • Bolao Copa do Mundo 2026', W/2, H-30);
+
+  // Download
+  var link = document.createElement('a');
+  link.download = 'ranking_bolao_'+hoje.replace(/\//g,'-')+'.png';
+  link.href = canvas.toDataURL('image/png');
+  link.click();
+
+  // Preview
+  canvas.style.cssText='width:100%;border-radius:8px;margin-top:8px';
+  var prev = document.getElementById('preview-ranking');
+  prev.innerHTML='';
+  prev.appendChild(canvas);
+  toast('Imagem gerada e baixada!','ok');
+}
+
 function salvarPosicoes(){
   var atual = localStorage.getItem('bolao_rank_atual');
   if(!atual){toast('Calcule o ranking primeiro!','err');return;}
@@ -2035,6 +2183,21 @@ async function renderAdmin(){
       '</div>';
   }).join('');
   document.getElementById('div-admin').innerHTML=
+    '<div class="acard" style="border-color:#E0E7FF;margin-bottom:12px">'+
+      '<h3>&#x1F4CD; Marcar Posicoes do Ranking</h3>'+
+      '<div style="font-size:11px;color:var(--texto3);margin-bottom:10px;line-height:1.6">'+
+        'Clique ANTES de inserir um resultado. As setas de variacao aparecem para todos no ranking.'+
+      '</div>'+
+      '<div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap">'+
+        '<button class="btn-sv" onclick="salvarPosicoes()" style="background:#6366F1">'+
+          '&#x1F4CD; Marcar posicoes agora'+
+        '</button>'+
+        (Object.keys(RANK_ANTERIOR).length>0?
+          '<span style="font-size:11px;color:#6366F1;font-weight:600">'+
+            Object.keys(RANK_ANTERIOR).length+' posicoes marcadas &#x2713;</span>':
+          '<span style="font-size:11px;color:var(--texto3)">Nenhuma marcada ainda</span>')+
+      '</div>'+
+    '</div>'+
     '<div class="acard"><h3>Inserir Resultados ('+semRes.length+' pendentes)</h3>'+
       (iSR||'<div class="empty" style="padding:16px"><div class="empty-text">Todos inseridos!</div></div>')+
     '</div>'+
@@ -2131,6 +2294,12 @@ async function renderAdmin(){
           return j?"#"+id+" "+j[5]+" x "+j[6]:"#"+id;
         }).join(", ")+"</div>"
         :"")+
+    '</div>'+
+    '<div class="acard" style="border-color:#BFDBFE;margin-bottom:12px">'+
+      '<h3>&#x1F4F8; Gerar Imagem Ranking 16x9</h3>'+
+      '<div style="font-size:11px;color:var(--texto3);margin-bottom:10px">Gera imagem 1920x1080 para enviar no WhatsApp.</div>'+
+      '<button class="btn-sv" onclick="gerarImagemRanking()" style="background:#1D4ED8">&#x1F4F8; Gerar e Baixar</button>'+
+      '<div id="preview-ranking" style="margin-top:12px"></div>'+
     '</div>';
 }
 
