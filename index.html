@@ -1716,13 +1716,13 @@ async function gerarImagemRanking(){
 
   // Cores top 5
   var coresTop=[
-    {bg:'#FFFBEA',borda:'#C8960A',texto:'#6B4E00',pts:'#8B6200'},
+    {bg:'#FFFBEA',borda:'#C8960A',texto:'#6B4E00',pts:'#7A5500'},
     {bg:'#EAF4FF',borda:'#1A6FB0',texto:'#0A3D6A',pts:'#0A3D6A'},
     {bg:'#E8F8EE',borda:'#0A8A4A',texto:'#05512C',pts:'#05512C'},
     {bg:'#FFF4EA',borda:'#C86010',texto:'#7A3800',pts:'#7A3800'},
     {bg:'#F5EAFF',borda:'#8A22B8',texto:'#4A0E70',pts:'#4A0E70'},
   ];
-  var corPad={bg:'#FFFFFF',borda:'#C8D4E0',texto:'#2D3748',pts:'#1A202C'};
+  var corPad={bg:'#FFFFFF',borda:'#B0C0D0',texto:'#2D3748',pts:'#1A202C'};
 
   // Layout
   var PAD=14,GAP=8;
@@ -1732,21 +1732,16 @@ async function gerarImagemRanking(){
   var n=rank.length;
   var nRows=Math.ceil(n/2);
   var itemH=Math.floor(availH/nRows);
-  itemH=Math.min(itemH,78);
+  itemH=Math.min(itemH,80);
 
-  // Tamanhos de fonte
-  var fPos =Math.round(itemH*0.33);  // numero posicao
-  var fNome=Math.round(itemH*0.27);
-  var fPts =Math.round(itemH*0.35);
+  // Fontes maiores
+  var fPos =Math.round(itemH*0.40);  // numero da posicao — grande
+  var fNome=Math.round(itemH*0.30);  // nome
+  var fPts =Math.round(itemH*0.38);  // pontos — destaque
 
-  // Largura fixa do bloco de posicao (alinhamento uniforme)
+  // Largura fixa do bloco de posicao
   ctx.font='bold '+fPos+'px Arial';
-  var posBlkW=Math.max(
-    ctx.measureText('1').width,
-    ctx.measureText('9').width,
-    ctx.measureText('10').width,
-    ctx.measureText('40').width
-  )+10;
+  var posBlkW=ctx.measureText('40').width+6;
 
   for(var i=0;i<n;i++){
     var u=rank[i];
@@ -1761,9 +1756,7 @@ async function gerarImagemRanking(){
 
     // Sombra
     ctx.shadowColor='rgba(0,0,0,0.10)';
-    ctx.shadowBlur=5;ctx.shadowOffsetY=2;
-
-    // Fundo
+    ctx.shadowBlur=4;ctx.shadowOffsetY=2;
     ctx.fillStyle=cor.bg;
     ctx.beginPath();
     if(ctx.roundRect){ctx.roundRect(x+2,y+2,colW-4,itemH-4,9);}
@@ -1774,28 +1767,28 @@ async function gerarImagemRanking(){
     // Borda esquerda
     ctx.fillStyle=cor.borda;
     ctx.beginPath();
-    if(ctx.roundRect){ctx.roundRect(x+2,y+2,isTop?6:3,itemH-4,isTop?[5,0,0,5]:[3,0,0,3]);}
-    else{ctx.rect(x+2,y+2,isTop?6:3,itemH-4);}
+    if(ctx.roundRect){ctx.roundRect(x+2,y+2,isTop?7:3,itemH-4,isTop?[5,0,0,5]:[3,0,0,3]);}
+    else{ctx.rect(x+2,y+2,isTop?7:3,itemH-4);}
     ctx.fill();
 
-    // Divisoria inferior
-    ctx.strokeStyle='rgba(190,205,220,0.5)';ctx.lineWidth=1;
+    // Divisoria
+    ctx.strokeStyle='rgba(185,200,215,0.45)';ctx.lineWidth=1;
     ctx.beginPath();ctx.moveTo(x+8,y+itemH-1);ctx.lineTo(x+colW-8,y+itemH-1);ctx.stroke();
 
-    // POSICAO — numero sem simbolo ordinal
+    var margEsq=x+(isTop?14:10);
+
+    // POSICAO — numeral grande alinhado a direita do bloco fixo
     ctx.fillStyle=cor.borda;
     ctx.font='bold '+fPos+'px Arial';
     ctx.textAlign='right';
-    // Alinha posicao em bloco fixo a partir da borda esquerda
-    ctx.fillText(String(pos), x+isTop?16:12+posBlkW, midY+fPos*0.37);
+    ctx.fillText(String(pos), margEsq+posBlkW, midY+fPos*0.37);
 
-    // NOME — com espaco generoso apos o bloco de posicao
-    var nX=x+(isTop?16:12)+posBlkW+20; // 20px de gap entre posicao e nome
-    // Calcula espaco disponivel para nome
+    // NOME — com gap de 18px apos o bloco de posicao
+    var nX=margEsq+posBlkW+18;
     ctx.font='bold '+fPts+'px Arial';
-    var ptsTxt=u.total+' pts';
-    var ptsW=ctx.measureText(ptsTxt).width+12;
-    var nomeMaxW=colW-(nX-x)-ptsW-10;
+    var ptsTxt=String(u.total)+' pts';
+    var ptsW=ctx.measureText(ptsTxt).width+10;
+    var nomeMaxW=colW-(nX-x)-ptsW-6;
 
     ctx.fillStyle=cor.texto;
     ctx.font=(isTop?'bold ':'')+fNome+'px Arial';
@@ -1805,7 +1798,7 @@ async function gerarImagemRanking(){
     if(ns!==u.nome) ns+='.';
     ctx.fillText(ns, nX, midY+fNome*0.37);
 
-    // PONTOS — numero escuro e destacado
+    // PONTOS escuros e grandes
     ctx.fillStyle=cor.pts;
     ctx.font='bold '+fPts+'px Arial';
     ctx.textAlign='right';
