@@ -1682,111 +1682,118 @@ async function gerarImagemRanking(){
   canvas.width=W;canvas.height=H;
   var ctx=canvas.getContext('2d');
 
-  // Fundo
-  var grad=ctx.createLinearGradient(0,0,0,H);
-  grad.addColorStop(0,'#071526');
-  grad.addColorStop(0.5,'#0f2a4a');
-  grad.addColorStop(1,'#071526');
-  ctx.fillStyle=grad;
+  // Fundo CLARO
+  ctx.fillStyle='#F0F4F8';
   ctx.fillRect(0,0,W,H);
 
-  // Pontilhado
-  ctx.fillStyle='rgba(255,255,255,0.035)';
-  for(var xi=0;xi<W;xi+=45){
-    for(var yi=0;yi<H;yi+=45){
-      ctx.beginPath();ctx.arc(xi,yi,2,0,Math.PI*2);ctx.fill();
-    }
-  }
+  // Faixa de cabecalho escura
+  var hdrH=190;
+  var hdrGrad=ctx.createLinearGradient(0,0,W,hdrH);
+  hdrGrad.addColorStop(0,'#0B1E3D');
+  hdrGrad.addColorStop(1,'#1a3a6c');
+  ctx.fillStyle=hdrGrad;
+  ctx.fillRect(0,0,W,hdrH);
 
   // Bordas Copa
   var bL=ctx.createLinearGradient(0,0,0,H);
   bL.addColorStop(0,'#FFD700');bL.addColorStop(0.5,'#00A36C');bL.addColorStop(1,'#003580');
-  ctx.fillStyle=bL;ctx.fillRect(0,0,12,H);ctx.fillRect(W-12,0,12,H);
-  var bT=ctx.createLinearGradient(0,0,W,0);
-  bT.addColorStop(0,'#FFD700');bT.addColorStop(0.5,'#00A36C');bT.addColorStop(1,'#003580');
-  ctx.fillStyle=bT;ctx.fillRect(12,0,W-24,10);ctx.fillRect(12,H-10,W-24,10);
+  ctx.fillStyle=bL;ctx.fillRect(0,0,10,H);ctx.fillRect(W-10,0,10,H);
+  ctx.fillStyle='#FFD700';ctx.fillRect(10,0,W-20,8);
+  ctx.fillStyle='#003580';ctx.fillRect(10,H-8,W-20,8);
 
-  // HEADER
+  // Titulo no header
   ctx.textAlign='center';
   ctx.fillStyle='#FFD700';
   ctx.font='bold 72px Arial';
-  ctx.fillText('RANKING', W/2, 100);
-
-  ctx.fillStyle='rgba(255,255,255,0.5)';
+  ctx.fillText('RANKING', W/2, 82);
+  ctx.fillStyle='rgba(255,255,255,0.65)';
   ctx.font='26px Arial';
-  ctx.fillText('Bolao Copa do Mundo 2026', W/2, 140);
-
-  ctx.fillStyle='rgba(255,215,0,0.35)';
-  ctx.fillRect(60,158,W-120,2);
-
+  ctx.fillText('Bolao Copa do Mundo 2026', W/2, 120);
   var jogosDisp=Object.keys(resMap).length;
-  ctx.fillStyle='rgba(255,255,255,0.38)';
-  ctx.font='22px Arial';
-  ctx.fillText(jogosDisp+' jogos disputados  \u2022  '+rank.length+' participantes', W/2, 186);
+  ctx.fillStyle='rgba(255,255,255,0.40)';
+  ctx.font='21px Arial';
+  ctx.fillText(jogosDisp+' jogos disputados  \u2022  '+rank.length+' participantes', W/2, 158);
 
-  // Cores para os 5 primeiros (uma por posicao)
+  // Linha separadora cabecalho
+  ctx.strokeStyle='rgba(255,215,0,0.5)';ctx.lineWidth=2;
+  ctx.beginPath();ctx.moveTo(40,176);ctx.lineTo(W-40,176);ctx.stroke();
+
+  // Cores top 5
   var coresTop=[
-    {bg:'rgba(255,215,0,0.22)',  borda:'#FFD700',       texto:'#FFD700'},   // 1o ouro
-    {bg:'rgba(99,220,255,0.16)', borda:'#63DCFF',       texto:'#63DCFF'},   // 2o azul claro
-    {bg:'rgba(0,210,120,0.16)',  borda:'#00D278',       texto:'#00D278'},   // 3o verde
-    {bg:'rgba(255,140,0,0.16)',  borda:'#FF8C00',       texto:'#FF8C00'},   // 4o laranja
-    {bg:'rgba(220,80,220,0.16)', borda:'#DC50DC',       texto:'#DC50DC'},   // 5o roxo
+    {bg:'#FFF8DC', borda:'#D4A000', texto:'#7A5C00'},  // 1o ouro
+    {bg:'#E8F4FF', borda:'#1A7FC4', texto:'#0A4A7A'},  // 2o azul
+    {bg:'#E6F9F0', borda:'#0A9A58', texto:'#06613A'},  // 3o verde
+    {bg:'#FFF2E5', borda:'#E07010', texto:'#8A4200'},  // 4o laranja
+    {bg:'#F5E6FF', borda:'#9B30C8', texto:'#5A1A80'},  // 5o roxo
   ];
+  var corPadrao={bg:'#FFFFFF',borda:'#D0D8E4',texto:'#2D3748'};
 
   // GRID 2 COLUNAS
-  var PAD=16,GAP=10;
+  var PAD=16,GAP=8;
   var colW=(W-PAD*2-GAP)/2;
-  var startY=200;
-  var availH=H-startY-55;
+  var startY=196;
+  var availH=H-startY-52;
   var n=rank.length;
   var nRows=Math.ceil(n/2);
   var itemH=Math.floor(availH/nRows);
-  itemH=Math.min(itemH,74);
+  itemH=Math.min(itemH,76);
 
   var fPos =Math.round(itemH*0.30);
-  var fNome=Math.round(itemH*0.27);
-  var fPts =Math.round(itemH*0.34);
+  var fNome=Math.round(itemH*0.28);
+  var fPts =Math.round(itemH*0.33);
 
   for(var i=0;i<n;i++){
     var u=rank[i];
     var pos=posicoes[i];
     var isTop=pos<=5;
+    var cor=isTop?coresTop[pos-1]:corPadrao;
     var colIdx=i<nRows?0:1;
     var row=i<nRows?i:i-nRows;
     var x=PAD+colIdx*(colW+GAP);
     var y=startY+row*itemH;
-    var midY=y+itemH/2+2;
+    var midY=y+itemH/2+1;
 
-    var cor=isTop?coresTop[pos-1]:null;
+    // Sombra leve
+    ctx.shadowColor='rgba(0,0,0,0.08)';
+    ctx.shadowBlur=4;
+    ctx.shadowOffsetY=2;
 
     // Fundo item
-    if(isTop){
-      ctx.fillStyle=cor.bg;
-    } else {
-      ctx.fillStyle='rgba(255,255,255,0.05)';
-    }
+    ctx.fillStyle=cor.bg;
     ctx.beginPath();
-    if(ctx.roundRect){ctx.roundRect(x+2,y+3,colW-4,itemH-6,8);}
-    else{ctx.rect(x+2,y+3,colW-4,itemH-6);}
+    if(ctx.roundRect){ctx.roundRect(x+2,y+2,colW-4,itemH-4,8);}
+    else{ctx.rect(x+2,y+2,colW-4,itemH-4);}
+    ctx.fill();
+    ctx.shadowColor='transparent';ctx.shadowBlur=0;ctx.shadowOffsetY=0;
+
+    // Borda colorida esquerda (mais grossa para top5)
+    ctx.fillStyle=cor.borda;
+    ctx.beginPath();
+    if(ctx.roundRect){ctx.roundRect(x+2,y+2,isTop?6:3,itemH-4,isTop?[4,0,0,4]:[3,0,0,3]);}
+    else{ctx.rect(x+2,y+2,isTop?6:3,itemH-4);}
     ctx.fill();
 
-    // Borda esquerda colorida
-    ctx.fillStyle=isTop?cor.borda:'rgba(255,255,255,0.10)';
-    ctx.beginPath();
-    if(ctx.roundRect){ctx.roundRect(x+2,y+3,5,itemH-6,4);}
-    else{ctx.rect(x+2,y+3,5,itemH-6);}
-    ctx.fill();
+    // Linha divisoria entre itens
+    ctx.strokeStyle='rgba(200,210,220,0.6)';ctx.lineWidth=1;
+    ctx.beginPath();ctx.moveTo(x+2,y+itemH-1);ctx.lineTo(x+colW-2,y+itemH-1);ctx.stroke();
+
+    var margEsq = x+(isTop?16:10);
 
     // Posicao
-    ctx.fillStyle=isTop?cor.texto:'rgba(255,255,255,0.40)';
+    ctx.fillStyle=cor.texto;
     ctx.font='bold '+fPos+'px Arial';
     ctx.textAlign='left';
-    ctx.fillText(pos+'o', x+12, midY+fPos*0.38);
+    ctx.fillText(pos+'o', margEsq, midY+fPos*0.38);
 
-    // Nome
-    var nX=x+fPos*1.6+14;
-    var nomeMaxW=colW-fPos*1.6-fPts*2.7-20;
-    ctx.fillStyle=isTop?cor.texto:'rgba(255,255,255,0.78)';
+    // Nome — logo apos a posicao sem espaco desnecessario
+    var nX=margEsq+fPos*1.5;
+    // Espaco disponivel para nome: ate onde comecam os pontos
+    var ptsTxt=u.total+'pts';
+    ctx.font='bold '+fPts+'px Arial';
+    var ptsW=ctx.measureText(ptsTxt).width;
+    var nomeMaxW=colW-(nX-x)-ptsW-20;
+
+    ctx.fillStyle=cor.texto;
     ctx.font=(isTop?'bold ':'')+fNome+'px Arial';
     ctx.textAlign='left';
     var ns=u.nome;
@@ -1794,20 +1801,20 @@ async function gerarImagemRanking(){
     if(ns!==u.nome) ns+='.';
     ctx.fillText(ns, nX, midY+fNome*0.38);
 
-    // Pontos
-    ctx.fillStyle=isTop?cor.texto:'rgba(255,255,255,0.65)';
+    // Pontos colados a borda direita
+    ctx.fillStyle=cor.borda;
     ctx.font='bold '+fPts+'px Arial';
     ctx.textAlign='right';
-    ctx.fillText(u.total+'pts', x+colW-8, midY+fPts*0.38);
+    ctx.fillText(ptsTxt, x+colW-8, midY+fPts*0.38);
   }
 
   // Rodape
   var hoje=new Date().toLocaleDateString('pt-BR',{day:'2-digit',month:'2-digit',year:'numeric'});
   var hora=new Date().toLocaleTimeString('pt-BR',{hour:'2-digit',minute:'2-digit'});
-  ctx.fillStyle='rgba(255,255,255,0.25)';
+  ctx.fillStyle='rgba(0,0,0,0.30)';
   ctx.font='20px Arial';
   ctx.textAlign='center';
-  ctx.fillText('Atualizado '+hoje+' as '+hora, W/2, H-26);
+  ctx.fillText('Atualizado '+hoje+' as '+hora, W/2, H-22);
 
   var link=document.createElement('a');
   link.download='ranking_bolao_'+hoje.replace(/\//g,'-')+'.png';
