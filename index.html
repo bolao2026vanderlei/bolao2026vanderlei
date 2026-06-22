@@ -1017,6 +1017,7 @@ async function renderInicio(){
     await atualizarRankCache();
   }
   var r=calcCache();
+  var jogosDisp=Object.keys(RESULS).length;
   var pend=JOGOS.filter(function(j){
     var st=statusJogo(j[1], j[0]);
     return !PALPS[j[0]]&&(st==='aberto'||st==='fechando');
@@ -1041,6 +1042,7 @@ async function renderInicio(){
     '<div class="hero-card">' +
       '<div class="hero-label">&#x2714; Acertos</div>' +
       '<div class="hero-valor">' + r.acertos + '</div>' +
+      '<div class="hero-sub" style="font-size:10px;color:var(--texto3);margin-top:4px">' + jogosDisp + ' jogos disputados</div>' +
       '</div>' +
     '<div class="hero-card">' +
       '<div class="hero-label" style="color:#1E3A8A">&#x2605; Exatos</div>' +
@@ -2006,10 +2008,15 @@ async function renderRanking(){
           variacaoHtml+
         '</div>'+
         '<div class="mbar"><div class="mbar-fill" style="width:'+pct+'%"></div></div>'+
-        '<div class="rank-sub">'+u.acertos+' acertos &bull; '+u.exatos+' exatos &bull; '+u.np+' palpites</div>'+
+        '<div class="rank-sub">'+
+        '<span style="color:#065F46;font-weight:700">'+u.acertos+' acertos</span>'+
+        ' &bull; '+
+        '<span style="background:#1E3A8A;color:#fff;font-weight:800;border-radius:10px;padding:1px 7px;font-size:10px">'+u.exatos+' exatos</span>'+
+        ' &bull; '+u.np+' palpites'+
+      '</div>'+
       '</div>'+
       '<div style="text-align:center">'+
-        '<div class="rank-pts">'+u.total+'</div>'+
+        '<div class="rank-pts" style="color:'+(u.total>0?'var(--verde)':'var(--vermelho)')+'">'+u.total+'</div>'+
         '<div class="rank-pts-label">pts</div>'+
       '</div>'+
       '</div>';
