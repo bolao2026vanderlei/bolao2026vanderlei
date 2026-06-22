@@ -1840,22 +1840,25 @@ async function debugPontos(){
   var box = document.getElementById('debug-box');
   if(box.style.display === 'block'){
     box.style.display = 'none';
+    // Scroll de volta ao topo do ranking
+    document.getElementById('s-ranking').scrollTop = 0;
+    window.scrollTo(0,0);
     return;
   }
+  // Abre INLINE — empurra o ranking para baixo, não sobrepõe
   box.style.display = 'block';
-  box.style.position = 'fixed';
-  box.style.top = '60px';
-  box.style.left = '10px';
-  box.style.right = '10px';
-  box.style.zIndex = '9999';
-  box.style.maxHeight = '70vh';
-  box.style.overflowY = 'auto';
+  box.style.position = 'static';
+  box.style.width = '100%';
+  box.style.maxHeight = 'none';
+  box.style.overflowY = 'visible';
   box.style.border = '2px solid var(--azul)';
-  box.style.boxShadow = '0 4px 20px rgba(0,0,0,.4)';
+  box.style.boxShadow = '0 2px 12px rgba(0,0,0,.15)';
   box.style.background = 'var(--card)';
   box.style.borderRadius = '12px';
   box.style.padding = '12px';
-  var dbId='debug-box';
+  box.style.marginBottom = '16px';
+  box.style.zIndex = 'auto';
+  box.style.boxSizing = 'border-box';
   box.innerHTML = '<div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:10px">'+
     '<span style="font-weight:700;color:var(--azul);font-size:14px">&#x1F4CA; Palpites Computados</span>'+
     '<button onclick="var b=document.getElementById(\x27debug-box\x27);b.style.display=\x27none\x27;" '+
