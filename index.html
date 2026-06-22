@@ -207,8 +207,8 @@ body{font-family:'Barlow',sans-serif;background:var(--cinza);color:var(--texto);
   font-weight:900;color:var(--texto);text-align:center;min-width:66px}
 .ptag{font-size:10px;font-weight:700;padding:3px 8px;
   border-radius:20px;display:inline-block;margin-top:3px;letter-spacing:.3px}
-.ptag.exato{background:#1E3A8A;color:#FFFFFF;font-weight:800;border:none}
-.ptag.result{background:var(--azul-light);color:var(--azul)}
+.ptag.exato{background:#1E3A8A;color:#FFFFFF;font-weight:900;border:none;font-size:12px;padding:4px 12px;letter-spacing:.5px;box-shadow:0 2px 6px rgba(30,58,138,0.4)}
+.ptag.result{background:#D1FAE5;color:#065F46;font-weight:700}
 .ptag.errou{background:var(--vermelho-light);color:var(--vermelho)}
 .pts-hint{font-size:10px;color:var(--texto3);text-align:center;margin-top:3px}
 
@@ -1041,8 +1041,7 @@ async function renderInicio(){
     '<div class="hero-card">' +
       '<div class="hero-label">&#x2714; Acertos</div>' +
       '<div class="hero-valor">' + r.acertos + '</div>' +
-      '<div class="hero-detalhe">' + r.exatos + ' exatos</div>' +
-    '</div>' +
+      '</div>' +
     '<div class="hero-card">' +
       '<div class="hero-label" style="color:#1E3A8A">&#x2605; Exatos</div>' +
       '<div class="hero-valor" style="color:#1E3A8A;font-weight:900">' + r.exatos + '</div>' +
@@ -1837,19 +1836,29 @@ function salvarPosicoes(){
 
 async function debugPontos(){
   var box = document.getElementById('debug-box');
-  // Força exibição
+  if(box.style.display === 'block'){
+    box.style.display = 'none';
+    return;
+  }
   box.style.display = 'block';
   box.style.position = 'fixed';
   box.style.top = '60px';
   box.style.left = '10px';
   box.style.right = '10px';
-  box.style.zIndex = '500';
+  box.style.zIndex = '9999';
   box.style.maxHeight = '70vh';
   box.style.overflowY = 'auto';
   box.style.border = '2px solid var(--azul)';
-  box.style.boxShadow = '0 4px 20px rgba(0,0,0,.3)';
-  // Botão fechar
-  box.innerHTML = '<button onclick="var b=document.getElementById(\x27debug-box\x27);b.style.display=\x27none\x27" style="float:right;padding:4px 10px;border-radius:6px;border:none;background:var(--vermelho);color:#fff;cursor:pointer;margin-bottom:8px">✕ Fechar</button><br>';
+  box.style.boxShadow = '0 4px 20px rgba(0,0,0,.4)';
+  box.style.background = 'var(--card)';
+  box.style.borderRadius = '12px';
+  box.style.padding = '12px';
+  var dbId='debug-box';
+  box.innerHTML = '<div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:10px">'+
+    '<span style="font-weight:700;color:var(--azul);font-size:14px">&#x1F4CA; Palpites Computados</span>'+
+    '<button onclick="var b=document.getElementById(\x27debug-box\x27);b.style.display=\x27none\x27;" '+
+    'style="padding:6px 14px;border-radius:8px;border:none;background:var(--vermelho);color:#fff;cursor:pointer;font-weight:700">'+
+    '&#x2715; Fechar</button></div>';
 
   box.textContent = 'Carregando...';
   var rRes = await dbAll('resultados');
@@ -1979,7 +1988,7 @@ async function renderRanking(){
       var ptsAnt = anterior.pts || 0;
       var diffPos = posAnt - pos; // positivo = subiu
       var diffPts = u.total - ptsAnt; // pontos ganhos
-      var ptsPart = diffPts > 0 ? ' <span style="font-size:10px;color:#16A34A;font-weight:600">(+'+diffPts+'pts)</span>' : '';
+      var ptsPart = diffPts > 0 ? ' <span style="font-size:12px;color:#16A34A;font-weight:700">(+'+diffPts+'pts)</span>' : '';
       if(diffPos > 0){
         variacaoHtml = '<span style="color:#16A34A;font-size:11px;font-weight:700">&#x25B2;'+diffPos+'</span>'+ptsPart;
       } else if(diffPos < 0){
