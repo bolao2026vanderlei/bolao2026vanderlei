@@ -1985,12 +1985,22 @@ async function renderRanking(){
     // Calcula variacao de posicao e pontos
     var anterior = RANK_ANTERIOR[u.nome];
     var variacaoHtml = '';
+    // Sempre mostra pontos mesmo sem posição anterior marcada
     if(anterior){
       var posAnt = anterior.pos || anterior; // compativel com formato antigo
       var ptsAnt = anterior.pts || 0;
       var diffPos = posAnt - pos; // positivo = subiu
       var diffPts = u.total - ptsAnt; // pontos ganhos
-      var ptsPart = diffPts > 0 ? ' <span style="font-size:12px;color:#16A34A;font-weight:700">(+'+diffPts+'pts)</span>' : '';
+      // Cor dos pontos ganhos: azul=exato(10pts), verde=resultado(6pts), vermelho=zero
+      var corPts, txtPts;
+      if(diffPts >= 10){
+        corPts='#1E3A8A'; txtPts='(+'+diffPts+'pts)'; // azul escuro = exato
+      } else if(diffPts > 0){
+        corPts='#16A34A'; txtPts='(+'+diffPts+'pts)'; // verde = resultado
+      } else {
+        corPts='#DC2626'; txtPts='(0pts)'; // vermelho = não pontuou
+      }
+      var ptsPart = ' <span style="font-size:12px;color:'+corPts+';font-weight:700">'+txtPts+'</span>';
       if(diffPos > 0){
         variacaoHtml = '<span style="color:#16A34A;font-size:11px;font-weight:700">&#x25B2;'+diffPos+'</span>'+ptsPart;
       } else if(diffPos < 0){
@@ -2008,12 +2018,7 @@ async function renderRanking(){
           variacaoHtml+
         '</div>'+
         '<div class="mbar"><div class="mbar-fill" style="width:'+pct+'%"></div></div>'+
-        '<div class="rank-sub">'+
-        '<span style="color:#065F46;font-weight:700">'+u.acertos+' acertos</span>'+
-        ' &bull; '+
-        '<span style="background:#1E3A8A;color:#fff;font-weight:800;border-radius:10px;padding:1px 7px;font-size:10px">'+u.exatos+' exatos</span>'+
-        ' &bull; '+u.np+' palpites'+
-      '</div>'+
+        '<div class="rank-sub">'+u.acertos+' acertos &bull; '+u.exatos+' exatos &bull; '+u.np+' palpites</div>'+
       '</div>'+
       '<div style="text-align:center">'+
         '<div class="rank-pts" style="color:'+(u.total>0?'var(--verde)':'var(--vermelho)')+'">'+u.total+'</div>'+
