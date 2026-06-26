@@ -826,6 +826,11 @@ async function entrar(){
     rR.forEach(function(r){
       RESULS[parseInt(r.jogo_id)]={c:parseInt(r.gol_casa),f:parseInt(r.gol_fora)};
     });
+    var rT2 = await dbAll('times_jogos');
+    TIMES_JOGOS={};
+    rT2.forEach(function(r){
+      TIMES_JOGOS[parseInt(r.jogo_id)]={casa:r.time_casa,fora:r.time_fora};
+    });
   }catch(e){ console.error('Erro sync:', e); }
   finally{ noloading(); }
 
@@ -853,6 +858,11 @@ async function carregarDados(){
   try{
     var rP=await dbFilter('palpites','usuario',USER.nome);
     var rR=await dbAll('resultados');
+    var rT=await dbAll('times_jogos');
+    TIMES_JOGOS={};
+    rT.forEach(function(r){
+      TIMES_JOGOS[parseInt(r.jogo_id)]={casa:r.time_casa,fora:r.time_fora};
+    });
     PALPS={};rP.forEach(function(p){
     var gc=parseInt(p.gol_casa),gf=parseInt(p.gol_fora);
     if(p.gol_casa!=null&&p.gol_fora!=null&&!isNaN(gc)&&!isNaN(gf)){
@@ -2101,22 +2111,27 @@ function selectPais(idSelect, valorAtual) {
 var TIMES_JOGOS = {}; // {jogoId: {casa: 'Brasil', fora: 'Argentina'}}
 
 async function carregarTimesJogos() {
-  // Carrega do localStorage primeiro (rápido)
+  // Carrega localStorage para VENCEDOR_EXTRA
   try {
-    var local = localStorage.getItem('bolao_times_jogos');
-    if(local) TIMES_JOGOS = JSON.parse(local);
     var localVE = localStorage.getItem('bolao_vencedor_extra');
     if(localVE) VENCEDOR_EXTRA = JSON.parse(localVE);
   } catch(e) {}
-  // Tenta carregar do banco (pode não existir)
+  // Carrega times do banco (fonte de verdade)
   try {
     var rows = await dbAll('times_jogos');
+    TIMES_JOGOS = {};
     rows.forEach(function(r){
-      TIMES_JOGOS[r.jogo_id] = {casa: r.time_casa, fora: r.time_fora};
+      TIMES_JOGOS[parseInt(r.jogo_id)] = {casa: r.time_casa, fora: r.time_fora};
     });
-    // Salva no localStorage para acesso offline
+    // Atualiza cache local
     localStorage.setItem('bolao_times_jogos', JSON.stringify(TIMES_JOGOS));
-  } catch(e) { /* tabela pode nao existir */ }
+  } catch(e) {
+    // Fallback localStorage se banco falhar
+    try {
+      var local = localStorage.getItem('bolao_times_jogos');
+      if(local) TIMES_JOGOS = JSON.parse(local);
+    } catch(e2) {}
+  }
 }
 
 function getNomeExibicao(jogoId, lado, nomePadrao) {
@@ -2127,18 +2142,17 @@ function getNomeExibicao(jogoId, lado, nomePadrao) {
 
 async function salvarTimesDB(jogoId, nomeCasa, nomeFora) {
   try {
-    // Salva no localStorage (nao depende do banco)
+    // Salva no banco Supabase
+    var err = await dbUpsert('times_jogos', {
+      jogo_id: jogoId,
+      time_casa: nomeCasa,
+      time_fora: nomeFora,
+      atualizado_em: new Date().toISOString()
+    }, 'jogo_id');
+    if(err){ toast('Erro ao salvar time: '+err.message,'err'); return false; }
+    // Atualiza cache local
     TIMES_JOGOS[jogoId] = {casa: nomeCasa, fora: nomeFora};
     localStorage.setItem('bolao_times_jogos', JSON.stringify(TIMES_JOGOS));
-    // Tenta salvar no banco se a tabela existir (opcional)
-    try {
-      await dbUpsert('times_jogos', {
-        jogo_id: jogoId,
-        time_casa: nomeCasa,
-        time_fora: nomeFora,
-        atualizado_em: new Date().toISOString()
-      }, 'jogo_id');
-    } catch(e) { /* tabela pode nao existir — ignora */ }
     return true;
   } catch(e) {
     toast('Erro: '+e.message, 'err');
