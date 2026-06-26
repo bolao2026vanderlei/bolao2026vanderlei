@@ -1,6 +1,6 @@
 <!DOCTYPE html>
 <html lang="pt-BR">
-<head>
+<head><!-- Bolao Copa 2026 | build 20260626-1358 -->
 <meta charset="UTF-8">
 <link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='.9em' font-size='90'>⚽</text></svg>">
 <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0">
@@ -2603,7 +2603,17 @@ async function salvarRes(id){
   var r2=await adminOp('upsert_resultado',id,parseInt(vc),parseInt(vf));
   var err=r2.error;
   if(err){toast('Erro: '+err.message,'err');btn.disabled=false;btn.textContent='Salvar';}
-  else{RESULS[id]={c:parseInt(vc),f:parseInt(vf)};toast('Jogo #'+id+' salvo!','ok');setTimeout(renderAdmin,500);}
+  else{
+    toast('Jogo #'+id+' salvo!','ok');
+    RESULS[id]={c:parseInt(vc),f:parseInt(vf)};
+    await atualizarRankCache();
+    // Snapshot do ranking para setas de variação
+    var rankAtualStr=localStorage.getItem('bolao_rank_atual');
+    if(rankAtualStr) localStorage.setItem('bolao_rank_anterior',rankAtualStr);
+    // Preenche times dos próximos jogos automaticamente
+    await preencherTimesAutomatico();
+    renderAdmin();
+  }
 }
 
 function editarRes(id){
