@@ -2100,11 +2100,20 @@ function selectPais(idSelect, valorAtual) {
 var TIMES_JOGOS = {}; // {jogoId: {casa: 'Brasil', fora: 'Argentina'}}
 
 async function carregarTimesJogos() {
-  var rows = await dbAll('times_jogos');
-  TIMES_JOGOS = {};
-  rows.forEach(function(r){
-    TIMES_JOGOS[r.jogo_id] = {casa: r.time_casa, fora: r.time_fora};
-  });
+  // Carrega do localStorage primeiro (rápido)
+  try {
+    var local = localStorage.getItem('bolao_times_jogos');
+    if(local) TIMES_JOGOS = JSON.parse(local);
+  } catch(e) {}
+  // Tenta carregar do banco (pode não existir)
+  try {
+    var rows = await dbAll('times_jogos');
+    rows.forEach(function(r){
+      TIMES_JOGOS[r.jogo_id] = {casa: r.time_casa, fora: r.time_fora};
+    });
+    // Salva no localStorage para acesso offline
+    localStorage.setItem('bolao_times_jogos', JSON.stringify(TIMES_JOGOS));
+  } catch(e) { /* tabela pode nao existir */ }
 }
 
 function getNomeExibicao(jogoId, lado, nomePadrao) {
@@ -2114,15 +2123,24 @@ function getNomeExibicao(jogoId, lado, nomePadrao) {
 }
 
 async function salvarTimesDB(jogoId, nomeCasa, nomeFora) {
-  var err = await dbUpsert('times_jogos', {
-    jogo_id: jogoId,
-    time_casa: nomeCasa,
-    time_fora: nomeFora,
-    atualizado_em: new Date().toISOString()
-  }, 'jogo_id');
-  if(err) { toast('Erro ao salvar: '+err.message, 'err'); return false; }
-  TIMES_JOGOS[jogoId] = {casa: nomeCasa, fora: nomeFora};
-  return true;
+  try {
+    // Salva no localStorage (nao depende do banco)
+    TIMES_JOGOS[jogoId] = {casa: nomeCasa, fora: nomeFora};
+    localStorage.setItem('bolao_times_jogos', JSON.stringify(TIMES_JOGOS));
+    // Tenta salvar no banco se a tabela existir (opcional)
+    try {
+      await dbUpsert('times_jogos', {
+        jogo_id: jogoId,
+        time_casa: nomeCasa,
+        time_fora: nomeFora,
+        atualizado_em: new Date().toISOString()
+      }, 'jogo_id');
+    } catch(e) { /* tabela pode nao existir — ignora */ }
+    return true;
+  } catch(e) {
+    toast('Erro: '+e.message, 'err');
+    return false;
+  }
 }
 
 // ── ADMIN ─────────────────────────────────────────────────────────────────────
@@ -2364,14 +2382,20 @@ async function renderAdmin(){
 async function salvarTimes(id){
   var vc = document.getElementById('sc'+id+'c');
   var vf = document.getElementById('sc'+id+'f');
-  if(!vc||!vf)return;
-  var nc = vc.value, nf = vf.value;
-  if(!nc||!nf){toast('Selecione os dois times!','err');return;}
+  if(!vc&&!vf)return;
+  var nc = vc ? vc.value : '';
+  var nf = vf ? vf.value : '';
+  // Mantém time já salvo se o campo estiver vazio
+  var salvo = TIMES_JOGOS[id]||{};
+  if(!nc) nc = salvo.casa||'';
+  if(!nf) nf = salvo.fora||'';
+  if(!nc && !nf){toast('Selecione ao menos um time!','err');return;}
   var btn = document.querySelector('[onclick="salvarTimes('+id+')"]');
   if(btn){btn.disabled=true;btn.textContent='...';}
   var ok = await salvarTimesDB(id, nc, nf);
   if(ok){
-    toast(flag(nc)+nc+' x '+flag(nf)+nf+' salvo!','ok');
+    var label = nc&&nf ? flag(nc)+nc+' x '+flag(nf)+nf : (flag(nc||nf)+(nc||nf));
+    toast(label+' salvo!','ok');
     if(btn){btn.disabled=false;btn.innerHTML='&#x2713; Salvo';btn.classList.add('salvo');}
   } else {
     if(btn){btn.disabled=false;btn.innerHTML='&#x1F4BE; Salvar';}
