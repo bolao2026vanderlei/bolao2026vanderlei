@@ -615,6 +615,7 @@ var BLOQUEIO_MIN = 10; // minutos antes do jogo
 // ── ESTADO ──────────────────────────────────────────────────────────────────
 var USER=null, PALPS={}, RESULS={}, FILTRO='Todos', DTIMER={}, TTIMER=null;
 var JOGOS_REABERTOS = {};
+var VENCEDOR_EXTRA = {}; // {jogo_id: 'nome_do_time'} — vencedor em empate (penaltis/prorrogacao)
 var RANK_ANTERIOR = {}; // {nome: posicao} — snapshot do ranking anterior
 var JOGOS_ANULADOS = {9: true}; // Jogo #9 Alemanha x Curacao anulado por falha no cadastro // {jogoId: true} — jogo anulado, 0 pts para todos
 var JOGOS_HORARIO = {}; // overrides de data/hora admin: {jogoId: 'YYYY-MM-DDTHH:MM'} // admin pode forcar reabertura: {jogoId: true}
@@ -2104,6 +2105,8 @@ async function carregarTimesJogos() {
   try {
     var local = localStorage.getItem('bolao_times_jogos');
     if(local) TIMES_JOGOS = JSON.parse(local);
+    var localVE = localStorage.getItem('bolao_vencedor_extra');
+    if(localVE) VENCEDOR_EXTRA = JSON.parse(localVE);
   } catch(e) {}
   // Tenta carregar do banco (pode não existir)
   try {
@@ -2141,6 +2144,97 @@ async function salvarTimesDB(jogoId, nomeCasa, nomeFora) {
     toast('Erro: '+e.message, 'err');
     return false;
   }
+}
+
+
+// Mapa de chaveamento eliminatorio
+// chave: jogo_id do proximo jogo
+// valor: [jogo_id_casa, lado_casa, jogo_id_fora, lado_fora]
+// lado: 'venc' ou 'perd'
+var CHAVEAMENTO = {
+  89:  [75,'venc', 78,'venc'],
+  90:  [73,'venc', 76,'venc'],
+  91:  [74,'venc', 77,'venc'],
+  92:  [79,'venc', 80,'venc'],
+  93:  [85,'venc', 84,'venc'],
+  94:  [82,'venc', 81,'venc'],
+  95:  [87,'venc', 86,'venc'],
+  96:  [83,'venc', 88,'venc'],
+  97:  [89,'venc', 90,'venc'],
+  98:  [93,'venc', 94,'venc'],
+  99:  [91,'venc', 92,'venc'],
+  100: [95,'venc', 96,'venc'],
+  101: [97,'venc', 98,'venc'],
+  102: [99,'venc', 100,'venc'],
+  103: [101,'perd', 102,'perd'],
+  104: [101,'venc', 102,'venc']
+};
+
+// Calcula vencedor de um jogo eliminatorio
+function vencedorJogo(jogoId){
+  var r = RESULS[jogoId];
+  var j = JOGOS.find(function(x){return x[0]===jogoId;});
+  if(!r || !j) return null;
+  var tc = TIMES_JOGOS[jogoId];
+  var nomeCasa = (tc&&tc.casa) ? tc.casa : j[5];
+  var nomeFora = (tc&&tc.fora) ? tc.fora : j[6];
+  if(r.c > r.f) return {venc: nomeCasa, perd: nomeFora};
+  if(r.f > r.c) return {venc: nomeFora, perd: nomeCasa};
+  // EMPATE: usa VENCEDOR_EXTRA se admin definiu (prorrogacao/penaltis)
+  if(VENCEDOR_EXTRA[jogoId]){
+    var ve = VENCEDOR_EXTRA[jogoId];
+    var perd = ve === nomeCasa ? nomeFora : nomeCasa;
+    return {venc: ve, perd: perd};
+  }
+  // Sem definição: retorna null para sinalizar que precisa de definição
+  return null;
+}
+
+// Preenche automaticamente os times dos proximos jogos baseado nos resultados
+function salvarVencedorExtra(jogoId){
+  var sel = document.getElementById('ve'+jogoId);
+  if(!sel||!sel.value){toast('Selecione o time vencedor!','err');return;}
+  VENCEDOR_EXTRA[jogoId] = sel.value;
+  localStorage.setItem('bolao_vencedor_extra', JSON.stringify(VENCEDOR_EXTRA));
+  toast(sel.value+' definido como vencedor do jogo #'+jogoId+'!','ok');
+  // Atualiza chaveamento automaticamente
+  preencherTimesAutomatico();
+}
+
+async function preencherTimesAutomatico(){
+  var atualizados = 0;
+  var jogosChave = Object.keys(CHAVEAMENTO).map(Number);
+
+  for(var i=0; i<jogosChave.length; i++){
+    var jogoProx = jogosChave[i];
+    var ch = CHAVEAMENTO[jogoProx];
+    var jogoC = ch[0], ladoC = ch[1];
+    var jogoF = ch[2], ladoF = ch[3];
+
+    var resC = vencedorJogo(jogoC);
+    var resF = vencedorJogo(jogoF);
+
+    // Só preenche se pelo menos um dos jogos anteriores tem resultado
+    if(!resC && !resF) continue;
+
+    var salvo = TIMES_JOGOS[jogoProx]||{};
+    var nc = resC ? resC[ladoC] : salvo.casa||'';
+    var nf = resF ? resF[ladoF] : salvo.fora||'';
+
+    // Só atualiza se mudou algo
+    if(nc === salvo.casa && nf === salvo.fora) continue;
+
+    if(nc || nf){
+      var ok = await salvarTimesDB(jogoProx, nc, nf);
+      if(ok) atualizados++;
+    }
+  }
+
+  if(atualizados > 0){
+    toast(atualizados+' jogos preenchidos automaticamente!','ok');
+    renderAdmin();
+  }
+  return atualizados;
 }
 
 // ── ADMIN ─────────────────────────────────────────────────────────────────────
@@ -2375,8 +2469,48 @@ async function renderAdmin(){
       '<h3>&#x1F4F8; Gerar Imagem Ranking 16x9</h3>'+
       '<div style="font-size:11px;color:var(--texto3);margin-bottom:10px">Gera imagem 1920x1080 para enviar no WhatsApp.</div>'+
       '<button class="btn-sv" onclick="gerarImagemRanking()" style="background:#1D4ED8">&#x1F4F8; Gerar e Baixar</button>'+
+      '<button class="btn-sv" onclick="preencherTimesAutomatico()" style="background:#7C3AED;margin-top:8px">&#x26A1; Atualizar Chaveamento</button>'+
       '<div id="preview-ranking" style="margin-top:12px"></div>'+
     '</div>';
+  // Adiciona card de empates no topo do admin
+  renderEmpates();
+}
+
+function renderEmpates(){
+  if(!USER||!USER.admin) return;
+  var empatados=JOGOS.filter(function(j){
+    var r=RESULS[j[0]];
+    return r&&r.c===r.f&&j[2]!=='Fase de Grupos'&&!VENCEDOR_EXTRA[j[0]];
+  });
+  // Remove card anterior se existir
+  var old=document.getElementById('card-empates');
+  if(old) old.remove();
+  if(empatados.length===0) return;
+  var htmlRows=empatados.map(function(j){
+    var tc=TIMES_JOGOS[j[0]]||{};
+    var nc=tc.casa||j[5], nf=tc.fora||j[6];
+    return '<div style="display:flex;gap:8px;align-items:center;margin-bottom:8px;flex-wrap:wrap">'+
+      '<span style="font-size:12px;font-weight:700;color:var(--texto)">#'+j[0]+' '+nc+' x '+nf+'</span>'+
+      '<select id="ve'+j[0]+'" style="flex:1;min-width:140px;padding:7px;border-radius:8px;border:1.5px solid var(--borda);background:var(--cinza2);color:var(--texto);font-size:13px">'+
+        '<option value="">-- Quem passou? --</option>'+
+        '<option value="'+nc+'">'+nc+'</option>'+
+        '<option value="'+nf+'">'+nf+'</option>'+
+      '</select>'+
+      '<button class="btn-sv" onclick="salvarVencedorExtra('+j[0]+')" style="padding:7px 14px">&#x2713; OK</button>'+
+    '</div>';
+  }).join('');
+  var card=document.createElement('div');
+  card.id='card-empates';
+  card.className='acard';
+  card.style.borderColor='#FEF3C7';
+  card.style.marginBottom='12px';
+  card.innerHTML=
+    '<h3>&#x1F91D; Empates &#x2014; Quem avan&#xE7;ou?</h3>'+
+    '<div style="font-size:11px;color:var(--texto3);margin-bottom:10px">'+
+      'Indique o time que avan&#xE7;ou por prorroga&#xE7;&#xE3;o ou p&#xEA;naltis.'+
+    '</div>'+htmlRows;
+  var divAdmin=document.getElementById('div-admin');
+  if(divAdmin) divAdmin.insertBefore(card, divAdmin.firstChild);
 }
 
 async function salvarTimes(id){
