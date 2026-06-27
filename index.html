@@ -992,11 +992,16 @@ function ir(s){
   document.querySelectorAll('.bnav-btn').forEach(function(x){x.classList.remove('on');});
   document.getElementById('s-'+s).classList.add('on');
   document.getElementById('bn-'+s).classList.add('on');
-  // Recarrega resultados ao trocar de aba (garante dados atualizados)
-  dbAll('resultados').then(function(rR){
+  // Recarrega resultados E times ao trocar de aba
+  Promise.all([dbAll('resultados'), dbAll('times_jogos')]).then(function(res){
+    var rR=res[0], rT=res[1];
     RESULS={};
     rR.forEach(function(r){
       RESULS[parseInt(r.jogo_id)]={c:parseInt(r.gol_casa),f:parseInt(r.gol_fora)};
+    });
+    TIMES_JOGOS={};
+    rT.forEach(function(r){
+      TIMES_JOGOS[parseInt(r.jogo_id)]={casa:r.time_casa,fora:r.time_fora};
     });
     if(s==='inicio'){ atualizarRankCache().then(function(){ renderInicio(); }); }
     if(s==='palpites'){renderPalpites();}
@@ -2704,6 +2709,11 @@ document.addEventListener('visibilitychange', async function(){
       RESULS={};
       rR.forEach(function(r){
         RESULS[parseInt(r.jogo_id)]={c:parseInt(r.gol_casa),f:parseInt(r.gol_fora)};
+      });
+      var rT3 = await dbAll('times_jogos');
+      TIMES_JOGOS={};
+      rT3.forEach(function(r){
+        TIMES_JOGOS[parseInt(r.jogo_id)]={casa:r.time_casa,fora:r.time_fora};
       });
     }catch(e){ console.log('Erro ao recarregar:', e); }
   }
