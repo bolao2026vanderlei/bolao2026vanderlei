@@ -2186,6 +2186,7 @@ var CHAVEAMENTO = {
 
 // Calcula vencedor de um jogo eliminatorio
 function vencedorJogo(jogoId){
+  jogoId = parseInt(jogoId);
   var r = RESULS[jogoId];
   var j = JOGOS.find(function(x){return x[0]===jogoId;});
   if(!r || !j) return null;
@@ -2611,22 +2612,30 @@ function fecharJogo(){
 async function salvarRes(id){
   var vc=document.getElementById('a'+id+'c').value;
   var vf=document.getElementById('a'+id+'f').value;
-  if(vc===''||vf===''){toast('Preencha os dois placares!','err');return;}
+  if(vc===''||vf===''){toast('Preencha dos dois placares!','err');return;}
   var btn=document.getElementById('bsv'+id);
-  btn.disabled=true;btn.textContent='...';
+  if(btn){btn.disabled=true;btn.textContent='...';}
+
+  // Salva snapshot ANTES do resultado (para setas mostrarem variação correta)
+  var rankAtualStr=localStorage.getItem('bolao_rank_atual');
+  if(rankAtualStr) localStorage.setItem('bolao_rank_anterior',rankAtualStr);
+
   var r2=await adminOp('upsert_resultado',id,parseInt(vc),parseInt(vf));
   var err=r2.error;
-  if(err){toast('Erro: '+err.message,'err');btn.disabled=false;btn.textContent='Salvar';}
-  else{
+  if(err){
+    toast('Erro: '+err.message,'err');
+    if(btn){btn.disabled=false;btn.textContent='Salvar';}
+  } else {
     toast('Jogo #'+id+' salvo!','ok');
-    RESULS[id]={c:parseInt(vc),f:parseInt(vf)};
-    await atualizarRankCache();
-    // Snapshot do ranking para setas de variação
-    var rankAtualStr=localStorage.getItem('bolao_rank_atual');
-    if(rankAtualStr) localStorage.setItem('bolao_rank_anterior',rankAtualStr);
+    // Atualiza RESULS local com int
+    RESULS[parseInt(id)]={c:parseInt(vc),f:parseInt(vf)};
+    // Recalcula ranking completo do banco
+    await calcularRankCompleto();
     // Preenche times dos próximos jogos automaticamente
     await preencherTimesAutomatico();
     renderAdmin();
+    // NÃO sobrescreve bolao_rank_anterior aqui
+    // O anterior foi salvo ANTES do resultado — as setas ficam corretas
   }
 }
 
