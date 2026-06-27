@@ -2011,21 +2011,23 @@ async function renderRanking(){
       var diffPos = posAnt - pos; // positivo = subiu
       var diffPts = u.total - ptsAnt; // pontos ganhos
       // Cor dos pontos ganhos: azul=exato(10pts), verde=resultado(6pts), vermelho=zero
-      var corPts, txtPts;
+      var corPts='', txtPts='';
       if(diffPts >= 10){
         corPts='#1E3A8A'; txtPts='(+'+diffPts+'pts)'; // azul escuro = exato
       } else if(diffPts > 0){
         corPts='#16A34A'; txtPts='(+'+diffPts+'pts)'; // verde = resultado
-      } else {
-        corPts='#DC2626'; txtPts='(0pts)'; // vermelho = não pontuou
+      } else if(diffPts < 0){
+        corPts='#DC2626'; txtPts='('+diffPts+'pts)'; // vermelho = pontos negativos
       }
-      var ptsPart = ' <span style="font-size:12px;color:'+corPts+';font-weight:700">'+txtPts+'</span>';
+      // diffPts === 0: sem resultado novo ainda — não mostra nada
+      var ptsPart = txtPts ? ' <span style="font-size:12px;color:'+corPts+';font-weight:700">'+txtPts+'</span>' : '';
       if(diffPos > 0){
         variacaoHtml = '<span style="color:#16A34A;font-size:11px;font-weight:700">&#x25B2;'+diffPos+'</span>'+ptsPart;
       } else if(diffPos < 0){
         variacaoHtml = '<span style="color:#DC2626;font-size:11px;font-weight:700">&#x25BC;'+Math.abs(diffPos)+'</span>'+ptsPart;
       } else {
-        variacaoHtml = '<span style="color:#9CA3AF;font-size:11px">&#x2014;</span>'+ptsPart;
+        // Mesma posição: só mostra traço se tiver pontos a indicar
+        variacaoHtml = ptsPart ? '<span style="color:#9CA3AF;font-size:11px">&#x2014;</span>'+ptsPart : '';
       }
     }
 
