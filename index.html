@@ -1099,17 +1099,31 @@ async function renderPalpites(){
   document.getElementById('lista-palpites').innerHTML=
     lista.map(function(j){return jcard(j,true);}).join('');
 
-  // Scroll automático para o próximo jogo aberto, fechando ou bloqueado
+  // Scroll automático para o próximo jogo aberto — compatível com Android
   setTimeout(function(){
-    // Primeiro tenta achar jogo aberto ou fechando
     var alvo = document.querySelector('#lista-palpites [data-status="aberto"]') ||
                document.querySelector('#lista-palpites [data-status="fechando"]') ||
                document.querySelector('#lista-palpites [data-status="bloqueado"]');
-    if(alvo){
-      alvo.scrollIntoView({behavior:'smooth', block:'start'});
-      setTimeout(function(){ window.scrollBy(0,-70); }, 300);
+    if(!alvo) return;
+    // Usa scrollTo manual em vez de scrollIntoView (mais compatível Android)
+    var rect = alvo.getBoundingClientRect();
+    var scrollTop = window.pageYOffset || document.documentElement.scrollTop;
+    var destino = scrollTop + rect.top - 70; // 70px de offset para navbar
+    // Scroll suave manual compatível com todos os browsers
+    var inicio = window.pageYOffset;
+    var distancia = destino - inicio;
+    var duracao = 400;
+    var startTime = null;
+    function passo(timestamp){
+      if(!startTime) startTime = timestamp;
+      var progresso = Math.min((timestamp - startTime) / duracao, 1);
+      // Easing suave
+      var ease = progresso < 0.5 ? 2*progresso*progresso : -1+(4-2*progresso)*progresso;
+      window.scrollTo(0, inicio + distancia * ease);
+      if(progresso < 1) requestAnimationFrame(passo);
     }
-  }, 300);
+    requestAnimationFrame(passo);
+  }, 400);
 }
 function setFiltro(f){FILTRO=f;renderPalpites();}
 
