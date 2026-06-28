@@ -993,28 +993,25 @@ function ir(s){
   document.getElementById('s-'+s).classList.add('on');
   document.getElementById('bn-'+s).classList.add('on');
   // Recarrega resultados E times ao trocar de aba
-  Promise.all([dbAll('resultados'), dbAll('times_jogos')]).then(function(res){
-    var rR=res[0], rT=res[1];
-    RESULS={};
-    rR.forEach(function(r){
-      RESULS[parseInt(r.jogo_id)]={c:parseInt(r.gol_casa),f:parseInt(r.gol_fora)};
-    });
-    TIMES_JOGOS={};
-    rT.forEach(function(r){
-      TIMES_JOGOS[parseInt(r.jogo_id)]={casa:r.time_casa,fora:r.time_fora};
-    });
-    if(s==='inicio'){ atualizarRankCache().then(function(){ renderInicio(); }); }
-    if(s==='palpites'){renderPalpites();}
-    if(s==='ranking')renderRanking();
-    if(s==='regras')renderRegras();
-    if(s==='admin')renderAdmin();
-  }).catch(function(){
-    if(s==='inicio'){ atualizarRankCache().then(function(){ renderInicio(); }); }
-    if(s==='palpites'){renderPalpites();}
-    if(s==='ranking')renderRanking();
-    if(s==='regras')renderRegras();
-    if(s==='admin')renderAdmin();
-  });
+  (async function(){
+    try{
+      var rR = await dbAll('resultados');
+      RESULS={};
+      rR.forEach(function(r){
+        RESULS[parseInt(r.jogo_id)]={c:parseInt(r.gol_casa),f:parseInt(r.gol_fora)};
+      });
+      var rT = await dbAll('times_jogos');
+      TIMES_JOGOS={};
+      rT.forEach(function(r){
+        TIMES_JOGOS[parseInt(r.jogo_id)]={casa:r.time_casa,fora:r.time_fora};
+      });
+    }catch(e){ console.error('ir reload:', e); }
+    if(s==='inicio'){ await atualizarRankCache(); renderInicio(); }
+    if(s==='palpites') renderPalpites();
+    if(s==='ranking')  renderRanking();
+    if(s==='regras')   renderRegras();
+    if(s==='admin')    renderAdmin();
+  })();
   window.scrollTo(0,0);
 }
 
@@ -1843,12 +1840,24 @@ async function gerarImagemRanking(){
 }
 
 
-function salvarPosicoes(){
+async function salvarPosicoes(){
   var atual = localStorage.getItem('bolao_rank_atual');
   if(!atual){toast('Calcule o ranking primeiro!','err');return;}
+  // Salva no banco para todos verem
+  try{
+    await SB.from('rank_snapshot').upsert({
+      id: 1,
+      snapshot: JSON.parse(atual),
+      atualizado_em: new Date().toISOString()
+    }, {onConflict:'id'});
+    toast('Posicoes marcadas para todos!','ok');
+  }catch(e){
+    toast('Erro ao salvar snapshot: '+e.message,'err');
+    return;
+  }
+  // Atualiza local também
   localStorage.setItem('bolao_rank_anterior', atual);
   RANK_ANTERIOR = JSON.parse(atual);
-  toast('Posicoes salvas como referencia!','ok');
   renderRanking();
 }
 
@@ -1946,6 +1955,14 @@ async function debugPontos(){
 }
 
 async function renderRanking(){
+  // Carrega snapshot do banco (compartilhado entre todos)
+  try{
+    var snapRes = await SB.from('rank_snapshot').select('snapshot').eq('id',1).maybeSingle();
+    if(snapRes.data && snapRes.data.snapshot){
+      RANK_ANTERIOR = snapRes.data.snapshot;
+      localStorage.setItem('bolao_rank_anterior', JSON.stringify(RANK_ANTERIOR));
+    }
+  }catch(e){}
   document.getElementById('div-ranking').innerHTML=
     '<div style="text-align:center;padding:40px;color:var(--texto3)"><span class="spin"></span> Calculando...</div>';
   var rRes=await dbAll('resultados');
@@ -2622,10 +2639,6 @@ async function salvarRes(id){
   if(vc===''||vf===''){toast('Preencha dos dois placares!','err');return;}
   var btn=document.getElementById('bsv'+id);
   if(btn){btn.disabled=true;btn.textContent='...';}
-
-  // Salva snapshot ANTES do resultado (para setas mostrarem variação correta)
-  var rankAtualStr=localStorage.getItem('bolao_rank_atual');
-  if(rankAtualStr) localStorage.setItem('bolao_rank_anterior',rankAtualStr);
 
   var r2=await adminOp('upsert_resultado',id,parseInt(vc),parseInt(vf));
   var err=r2.error;
