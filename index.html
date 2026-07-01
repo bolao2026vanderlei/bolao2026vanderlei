@@ -590,8 +590,8 @@ var JOGOS = [
   [86,'2026-07-03T15:00','16-avos de Final','-','Dallas','2 Grupo D','2 Grupo G'],
   [87,'2026-07-03T19:00','16-avos de Final','-','Atlanta','1 Grupo J','2 Grupo H'],
   [88,'2026-07-03T22:30','16-avos de Final','-','Kansas City','1 Grupo K','3 DEIJL'],
-  [90,'2026-07-04T14:00','Oitavas de Final','-','Houston','Venc. J73','Venc. J76'],
-  [89,'2026-07-04T18:00','Oitavas de Final','-','Filadelfia','Venc. J75','Venc. J78'],
+  [89,'2026-07-04T14:00','Oitavas de Final','-','Filadelfia','Venc. J75','Venc. J78'],
+  [90,'2026-07-04T18:00','Oitavas de Final','-','Houston','Venc. J73','Venc. J76'],
   [91,'2026-07-05T17:00','Oitavas de Final','-','Nova Jersey','Venc. J74','Venc. J77'],
   [92,'2026-07-05T21:00','Oitavas de Final','-','C. do Mexico','Venc. J79','Venc. J80'],
   [93,'2026-07-06T15:00','Oitavas de Final','-','Dallas','Venc. J85','Venc. J84'],
@@ -2204,22 +2204,26 @@ async function salvarTimesDB(jogoId, nomeCasa, nomeFora) {
 // valor: [jogo_id_casa, lado_casa, jogo_id_fora, lado_fora]
 // lado: 'venc' ou 'perd'
 var CHAVEAMENTO = {
-  89:  [75,'venc', 78,'venc'],
-  90:  [73,'venc', 76,'venc'],
-  91:  [74,'venc', 77,'venc'],
-  92:  [79,'venc', 80,'venc'],
-  93:  [85,'venc', 84,'venc'],
-  94:  [82,'venc', 81,'venc'],
-  95:  [87,'venc', 86,'venc'],
-  96:  [83,'venc', 88,'venc'],
-  97:  [89,'venc', 90,'venc'],
-  98:  [93,'venc', 94,'venc'],
-  99:  [91,'venc', 92,'venc'],
-  100: [95,'venc', 96,'venc'],
-  101: [97,'venc', 98,'venc'],
-  102: [99,'venc', 100,'venc'],
-  103: [101,'perd', 102,'perd'],
-  104: [101,'venc', 102,'venc']
+  // Oitavas de final
+  89:  [73,'venc', 76,'venc'],   // Venc Africa Sul/Canada x Venc Holanda/Marrocos — 04/07 14h Houston
+  90:  [75,'venc', 78,'venc'],   // Venc Alemanha/Paraguai x Venc Franca/Suecia — 04/07 18h Philadelphia
+  91:  [74,'venc', 77,'venc'],   // Venc Brasil/Japao x Venc C.Marfim/Noruega — 05/07 17h Nova York
+  92:  [79,'venc', 80,'venc'],   // Venc Mexico/Equador x Venc Inglaterra/RDCongo — 05/07 21h Cidade do Mexico
+  93:  [83,'venc', 84,'venc'],   // Venc Espanha/Austria x Venc Portugal/Croacia — 06/07 15h Dallas
+  94:  [82,'venc', 81,'venc'],   // Venc EUA/Bosnia x Venc Belgica/Senegal — 06/07 20h Seattle
+  95:  [87,'venc', 86,'venc'],   // Venc Argentina/CaboVerde x Venc Australia/Egito — 07/07 13h Atlanta
+  96:  [85,'venc', 88,'venc'],   // Venc Suica/Argelia x Venc Colombia/Gana — 07/07 17h Vancouver
+  // Quartas de final
+  97:  [89,'venc', 90,'venc'],   // Oitavas1 x Oitavas2 — 09/07 17h Boston
+  98:  [91,'venc', 92,'venc'],   // Oitavas3 x Oitavas4 — 10/07 16h Los Angeles
+  99:  [93,'venc', 94,'venc'],   // Oitavas5 x Oitavas6 — 11/07 18h Miami
+  100: [95,'venc', 96,'venc'],   // Oitavas7 x Oitavas8 — 11/07 21h Kansas City
+  // Semifinais
+  101: [97,'venc',  98,'venc'],  // Quartas1 x Quartas2 — 14/07 16h Dallas
+  102: [99,'venc', 100,'venc'],  // Quartas3 x Quartas4 — 15/07 16h Dallas
+  // 3o lugar e Final
+  103: [101,'perd', 102,'perd'], // 3o lugar — 18/07 18h Miami
+  104: [101,'venc', 102,'venc']  // Final — 19/07 16h Nova York
 };
 
 // Calcula vencedor de um jogo eliminatorio
